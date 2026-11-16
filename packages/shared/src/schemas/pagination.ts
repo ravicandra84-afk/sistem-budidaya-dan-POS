@@ -8,6 +8,7 @@ export const paginationQuerySchema = z
     startDate: z.iso.datetime({ offset: true }).optional(),
     endDate: z.iso.datetime({ offset: true }).optional(),
   })
+  .strict()
   .refine(
     ({ startDate, endDate }) =>
       !startDate || !endDate || Date.parse(startDate) <= Date.parse(endDate),

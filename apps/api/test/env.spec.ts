@@ -10,6 +10,7 @@ const validEnvironment = {
   JWT_EXPIRES_IN: "8h",
   JWT_ISSUER: "pfi-test",
   JWT_AUDIENCE: "pfi-test-clients",
+  FRONTEND_URL: "http://localhost:3000",
   CORS_ALLOWED_ORIGINS: "http://localhost:3000",
 };
 

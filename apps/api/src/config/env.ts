@@ -29,7 +29,17 @@ const apiEnvironmentSchema = z.object({
   JWT_EXPIRES_IN: z.string().min(1),
   JWT_ISSUER: z.string().min(1),
   JWT_AUDIENCE: z.string().min(1),
+  FRONTEND_URL: z.url(),
   CORS_ALLOWED_ORIGINS: z.string().min(1),
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
+  RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(100),
+  BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(10).max(15).default(12),
+  DB_LOCK_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(60_000)
+    .default(5_000),
 });
 
 export type ApiEnvironment = z.infer<typeof apiEnvironmentSchema>;
