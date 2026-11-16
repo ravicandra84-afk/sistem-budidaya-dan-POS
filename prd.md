@@ -1083,8 +1083,8 @@ Bagian ini adalah daftar pertanyaan/keputusan yang memang belum dijawab dalam bl
 | TBD-05 | Sequence penjualan | `APPROVED — OWNER` | Menggunakan tabel `sale_daily_sequences` (`sale_date DATE PRIMARY KEY`, `last_number BIGINT`) tanpa batas 999. |
 | TBD-06 | Audit POS dan privilege | `APPROVED — OWNER` *(Actions)* / `TBD` *(DDL/Privileges)* | Nilai `action` (`CREATE_SALE`, `VOID_SALE`, `UPDATE_PRICE`) telah disetujui; trigger, `ALTER CONSTRAINT`, index, dan privilege runtime final dikunci pada `GPOS-02`. |
 | TBD-07 | Hak halaman audit untuk Kasir | `APPROVED — OWNER` | Role `Kasir` dilarang (`Forbidden`) mengakses data maupun halaman Audit Log. |
-| TBD-08 | Pengelolaan akun | `TBD — NEEDS DECISION` | Alur membuat akun, menonaktifkan akun, mengubah role, reset kata sandi, dan administrasi pengguna. |
-| TBD-09 | Pengalaman daftar data | `TBD — NEEDS DECISION` | Filter, pencarian, pengurutan, pagination, dan rentang tanggal untuk daftar batch, penjualan, dan audit log. |
+| TBD-08 | Pengelolaan akun | `PARTIALLY RESOLVED — OWNER` (ADR 0001) | Akun awal `Owner` lokal dibuat lewat CLI idempoten dengan kredensial dari `.env`; akun yang sudah ada tidak diubah. Registrasi publik, deaktivasi, perubahan role, reset kata sandi, dan administrasi pengguna tetap TBD. |
+| TBD-09 | Pagination & filter daftar | `APPROVED — OWNER` (ADR 0001) | `page=1`, `limit=20`, maksimum `100`; rentang `startDate`/`endDate` ISO 8601 diterapkan inklusif pada timestamp transaksi utama; `status` hanya memakai enum resmi; default terbaru dahulu (`DESC`) dengan `id DESC` sebagai tie-breaker stabil. Pencarian dan pilihan sort tambahan belum disetujui. |
 
 Jangan menyelesaikan TBD dengan tebakan. Catat pertanyaan dalam daftar keputusan produk, ajukan kepada pemilik produk, lalu perbarui PRD dan blueprint setelah mendapat persetujuan.
 

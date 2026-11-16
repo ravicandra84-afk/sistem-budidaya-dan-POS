@@ -191,21 +191,20 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 
 ## Task P0-02 — Kunci pilihan tunggal dari kandidat stack yang disetujui
 
-**Tujuan:** memilih satu opsi pasti per lapisan dari kandidat stack `APPROVED — OWNER` pada `architecture.md` dan mengunci keputusan teknis yang tersisa.
+**Tujuan:** mencatat pilihan stack yang telah disetujui pemilik produk melalui ADR 0001 dan menyelesaikan keputusan teknis yang masih terbuka.
 
-**Keputusan yang harus dikunci melalui persetujuan pemilik proyek:**
-- Pilihan tunggal framework frontend dari kandidat yang disetujui (**Next.js/React** vs **Vue.js**) beserta CSS/component library.
-- Pilihan tunggal framework backend Node.js + TypeScript dari kandidat yang disetujui (**Express.js** vs **NestJS**).
-- Pilihan tunggal ORM/query layer dan migration tool dari kandidat yang disetujui (**Prisma** vs **TypeORM** / **Golang Migrate**), dengan memastikan dukungan raw SQL transaksional untuk `SELECT ... FOR UPDATE` dan trigger PostgreSQL.
-- Library validasi request dan format dokumentasi API.
-- Test runner untuk unit, integration, dan end-to-end.
-- Strategi pengelolaan konfigurasi dan secret.
-- Target deployment spesifik dari opsi cloud yang disetujui (Supabase, Render, Vercel, atau AWS).
-- Strategi provisioning akun pengguna awal (`TBD-08`).
+**Keputusan yang telah dikunci pada ADR 0001:**
+- npm workspaces monorepo: `apps/api`, `apps/web`, `packages/shared`.
+- NestJS + TypeScript, Next.js App Router, Prisma + PostgreSQL/raw SQL berparameter.
+- Zod + class-validator, Tailwind CSS + shadcn/ui, Jest + Supertest.
+- Provisioning awal `Owner` lokal melalui CLI dari `.env`; tidak ada registrasi publik dan akun yang sudah ada tidak diubah.
+- Pagination/filter dasar: `page=1`, `limit=20` (maksimum 100), timestamp ISO 8601 `startDate`/`endDate`, status enum resmi, default urutan `DESC`.
+
+**Masih terbuka:** format dokumentasi API, target deployment, lifecycle administrasi akun selain provisioning awal, serta keputusan POS yang tetap berada di Gate POS.
 
 **Yang sudah ditetapkan dan tidak perlu dipilih ulang:** PostgreSQL 13+, JWT, RBAC, ACID, idempotency UUIDv4, `Asia/Jakarta`, gaya arsitektur Decoupled REST API, serta ekosistem runtime Node.js + TypeScript (`APPROVED — OWNER`).
 
-**Deliverable:** ADR/keputusan teknis yang disetujui. Pilihan stack tidak boleh disimpulkan dari preferensi AI.
+**Deliverable:** ADR 0001 dan konfigurasi workspace yang sesuai. Pilihan stack tidak boleh disimpulkan dari preferensi AI.
 
 **Acceptance criteria:**
 - Setiap pilihan memiliki alasan, dampak, dan status persetujuan.
@@ -618,12 +617,12 @@ Gate dinyatakan lulus hanya jika:
 | TBD-01 | `APPROVED — OWNER` | Ditetapkan batas harga Rp 1 s.d. Rp 10.000.000 per ekor (`BIGINT`, Rupiah bulat tanpa desimal). |
 | TBD-02 | `APPROVED — OWNER` | Audit perubahan harga (`action = 'UPDATE_PRICE'`) hanya mencatat aktor dan waktu (`old_values = NULL`, `new_values = NULL`). |
 | TBD-03 | `TBD — NEEDS DECISION` | Pendekatan ESC/POS Bluetooth (mobile) & Web USB/Browser Print (PC/laptop) disetujui, namun merek/model printer, solusi bridge Bluetooth iOS/iPhone, dan uji perangkat aktual tetap wajib diselesaikan di `GPOS-04`. |
-| TBD-04 | `TBD — NEEDS DECISION` | Request/response body, error code (termasuk rollback konkurensi/harga berubah dan kewajiban `Idempotency-Key` baru), pagination, serta strategi refresh dan konfirmasi harga pada API POS wajib dikunci di `GPOS-03`. |
+| TBD-04 | `TBD — NEEDS DECISION` | Request/response body, error code (termasuk rollback konkurensi/harga berubah dan kewajiban `Idempotency-Key` baru), serta strategi refresh dan konfirmasi harga API POS wajib dikunci di `GPOS-03`. Pagination/filter dasar mengikuti ADR 0001, tetapi envelope final POS tetap bagian kontrak API. |
 | TBD-05 | `APPROVED — OWNER` | Menggunakan tabel `sale_daily_sequences` (`sale_date DATE PRIMARY KEY`, `last_number BIGINT`) tanpa batas 999. |
 | TBD-06 | `APPROVED — OWNER` *(Actions)* / `TBD` *(DDL/Privileges)* | Nilai `action` (`CREATE_SALE`, `VOID_SALE`, `UPDATE_PRICE`) disetujui; `ALTER CONSTRAINT` DDL, trigger imutabilitas, index, dan `GRANT`/`REVOKE` runtime POS dikunci di `GPOS-02`. |
 | TBD-07 | `APPROVED — OWNER` | Role `Kasir` dilarang (`Forbidden`) mengakses data maupun halaman Audit Log. |
-| TBD-08 | `TBD — NEEDS DECISION` | Cara membuat akun, menonaktifkan akun, mengubah role, dan reset kata sandi harus diputuskan sebelum membangun administrasi pengguna. |
-| TBD-09 | `TBD — NEEDS DECISION` | Fitur pencarian, filter, sorting, dan pagination untuk daftar batch/penjualan/audit harus dikunci sebelum implementasi endpoint daftar. |
+| TBD-08 | `PARTIALLY RESOLVED — OWNER` (ADR 0001) | Provisioning awal `Owner` lokal melalui CLI idempoten dari `.env` telah disetujui. Deaktivasi akun, perubahan role, reset kata sandi, dan administrasi pengguna tetap TBD. |
+| TBD-09 | `APPROVED — OWNER` (ADR 0001) | Default `page=1`, `limit=20`, maksimum `100`; rentang tanggal ISO 8601 pada timestamp utama, status hanya enum resmi, urutan default `DESC`. Pencarian dan pilihan sort tambahan belum disetujui. |
 
 **Deliverable:** daftar keputusan yang seluruh barisnya memiliki status `APPROVED`, `REJECTED`, atau `DEFERRED` dengan dampak yang jelas. Baris yang memblokir desain tidak boleh dibiarkan kosong.
 

@@ -69,28 +69,18 @@ A locked business rule does not automatically make a proposed table, API payload
 - Transaction integrity: **ACID** transactions (`LOCKED — V4.5`).
 - Mutation idempotency: **UUIDv4 `Idempotency-Key`** according to the relevant API contract (`LOCKED — V4.5`).
 - Business timezone: **`Asia/Jakarta` (UTC+7)** (`LOCKED — V4.5`).
-- Architecture style & candidate stack ecosystem (`APPROVED — OWNER` in `architecture.md`): **Decoupled Client-Server REST API** using **Node.js + TypeScript** on the backend (Express.js or NestJS), **React.js (Next.js) or Vue.js** on the frontend, **Prisma ORM or TypeORM** (with raw SQL support for `SELECT ... FOR UPDATE` and PostgreSQL triggers), **Prisma Migrate or Golang Migrate**, and cloud hosting (Supabase, Render, Vercel, or AWS).
+- Architecture style and approved stack: Decoupled Client-Server REST API using Node.js + TypeScript, NestJS, Next.js App Router, Prisma with parameterized raw SQL, Zod + class-validator, Tailwind CSS + shadcn/ui, and Jest + Supertest. See ADR 0001.
 
-### 3.2 Unconfirmed single-choice stack selections (`Task P0-02`)
+### 3.2 Stack decisions locked by ADR 0001
 
-While the decoupled Node.js + TypeScript candidate ecosystem is `APPROVED — OWNER`, the product documents do **not** yet lock a single final choice for:
+The product owner selected this stack in `docs/adr/0001-monorepo-stack-and-list-contract.md`:
 
-- Single frontend framework choice (**Next.js/React** vs **Vue.js**) and rendering strategy.
-- Single backend framework choice (**Express.js** vs **NestJS**).
-- Single ORM/migration choice (**Prisma** vs **TypeORM** / **Golang Migrate**).
-- CSS framework or component library.
-- State-management, form, or data-fetching library.
-- API schema/documentation generator.
-- Unit, integration, or end-to-end test framework.
-- Specific hosting provider, deployment platform, or CI vendor.
+- npm workspaces: `apps/api`, `apps/web`, and `packages/shared`.
+- NestJS + TypeScript backend and Next.js App Router frontend.
+- Prisma with PostgreSQL and parameterized raw SQL for locking/custom DDL.
+- Zod + class-validator, Tailwind CSS + shadcn/ui, and Jest + Supertest.
 
-Therefore:
-
-1. Do not state or assume that a specific framework (e.g., Next.js vs Vue, Express vs NestJS, Prisma vs TypeORM, Tailwind CSS) is already locked before inspecting the repository and completing `Task P0-02`.
-2. Start by inspecting the repository manifests, lockfiles, configuration, source tree, migrations, and existing tests (`Task P0-01`).
-3. Reuse the established stack and conventions where they are sound and compatible with the approved requirements.
-4. If the repository is empty, prepare a short Architecture Decision Record (ADR) in `Task P0-02` selecting one option per layer from the `APPROVED — OWNER` candidates (evaluating trade-offs, compatibility with PostgreSQL triggers/`FOR UPDATE`, maintenance status, and recommendation). Wait for explicit project-owner approval before scaffolding.
-5. Never switch away from the approved Node.js + TypeScript ecosystem or rewrite an established repository merely because another technology is more familiar to the agent.
+The API documentation generator, hosting/deployment target, and CI vendor remain unselected. Do not infer these choices or replace the approved stack without explicit approval.
 
 ### 3.3 Dependency and library policy
 
@@ -283,10 +273,10 @@ Do not treat these as open blockers; implement them consistently with `architect
 Treat the following remaining open items as implementation blockers when they affect the assigned task:
 
 - `TBD-03`: actual printer brand/model, Bluetooth protocol, SDK/library, pairing method, iOS/iPhone printing bridge/wrapper approach, and tested cross-OS device compatibility matrix (`Gate POS` / `GPOS-04`).
-- `TBD-04`: final POS API request/response schemas, error codes (including concurrency/price-change rollback handling and fresh `Idempotency-Key` requirement), pagination, validation, and price refresh/confirmation contract (`Gate POS` / `GPOS-03`).
+- `TBD-04`: final POS API request/response schemas, error codes (including concurrency/price-change rollback handling and fresh `Idempotency-Key` requirement), and price refresh/confirmation contract (`Gate POS` / `GPOS-03`). Base list pagination/filter defaults are approved in ADR 0001; POS envelope details remain subject to its API gate.
 - `TBD-06` — DDL & Runtime Privileges: final POS database triggers, `ALTER CONSTRAINT` DDL scripts, indexes, and runtime `GRANT`/`REVOKE` privileges (`Gate POS` / `GPOS-02`).
-- `TBD-08`: account provisioning, deactivation, role changes, password reset, and user administration workflow (`Task P0-02` / `P3-03`).
-- `TBD-09`: filters, search, sorting, pagination, and date-range behavior for lists.
+- `TBD-08` (partially resolved in ADR 0001): local initial `Owner` provisioning by idempotent CLI from `.env` is approved. Account deactivation, role changes, password reset, and user administration remain unresolved.
+- `TBD-09` (base behavior approved in ADR 0001): `page=1`, `limit=20` (maximum 100), ISO 8601 `startDate`/`endDate` on the primary transaction timestamp, official status values only, and newest-first ordering. Search and additional sort options remain unresolved.
 
 Do not code around an open `TBD` by inventing a default. You may investigate options and produce an ADR or recommendation, clearly marked `PROPOSED`, but wait for the product owner's decision before treating it as approved.
 
