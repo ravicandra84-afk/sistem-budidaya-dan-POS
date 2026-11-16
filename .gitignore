@@ -1,0 +1,22 @@
+# File Konfigurasi Lingkungan & Rahasia (WAJIB DIABAIKAN)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.staging.local
+.env.production.local
+*.pem
+*.key
+
+# Dependensi & Build Artifacts
+node_modules/
+dist/
+build/
+.next/
+coverage/
+
+# Log & File Sistem Operasi
+logs/
+*.log
+.DS_Store
+Thumbs.db
