@@ -21,11 +21,17 @@ async function provisionOwner(): Promise<void> {
   });
 
   if (!credentials.success) {
-    const invalidKeys = [...new Set(credentials.error.issues.map((issue) => issue.path.join(".")))];
-    throw new Error(`Missing or invalid Owner seed configuration: ${invalidKeys.join(", ")}`);
+    const invalidKeys = [
+      ...new Set(credentials.error.issues.map((issue) => issue.path.join("."))),
+    ];
+    throw new Error(
+      `Missing or invalid Owner seed configuration: ${invalidKeys.join(", ")}`,
+    );
   }
 
-  const prisma = new PrismaClient({ datasources: { db: { url: getLocalMigrationUrl() } } });
+  const prisma = new PrismaClient({
+    datasources: { db: { url: getLocalMigrationUrl() } },
+  });
 
   try {
     const existing = await prisma.user.findFirst({
@@ -34,7 +40,9 @@ async function provisionOwner(): Promise<void> {
     });
 
     if (existing) {
-      console.log("Owner account already exists; no account fields were changed.");
+      console.log(
+        "Owner account already exists; no account fields were changed.",
+      );
       return;
     }
 
@@ -54,8 +62,13 @@ async function provisionOwner(): Promise<void> {
       });
       console.log("Initial Owner account created.");
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        console.log("Owner account already exists; no account fields were changed.");
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        console.log(
+          "Owner account already exists; no account fields were changed.",
+        );
         return;
       }
 
@@ -67,6 +80,8 @@ async function provisionOwner(): Promise<void> {
 }
 
 provisionOwner().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : "Owner provisioning failed.");
+  console.error(
+    error instanceof Error ? error.message : "Owner provisioning failed.",
+  );
   process.exitCode = 1;
 });

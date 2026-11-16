@@ -11,17 +11,26 @@ const species = [
 ];
 
 async function seedSpecies(): Promise<void> {
-  const prisma = new PrismaClient({ datasources: { db: { url: getLocalMigrationUrl() } } });
+  const prisma = new PrismaClient({
+    datasources: { db: { url: getLocalMigrationUrl() } },
+  });
 
   try {
-    const result = await prisma.fishSpecies.createMany({ data: species, skipDuplicates: true });
-    console.log(`Species seed complete: ${result.count} inserted; existing rows were unchanged.`);
+    const result = await prisma.fishSpecies.createMany({
+      data: species,
+      skipDuplicates: true,
+    });
+    console.log(
+      `Species seed complete: ${result.count} inserted; existing rows were unchanged.`,
+    );
   } finally {
     await prisma.$disconnect();
   }
 }
 
 seedSpecies().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : "Species seed failed.");
+  console.error(
+    error instanceof Error ? error.message : "Species seed failed.",
+  );
   process.exitCode = 1;
 });

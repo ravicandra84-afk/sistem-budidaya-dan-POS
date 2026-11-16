@@ -7,8 +7,8 @@ import { loadApiEnvironment } from "./config/env";
 async function bootstrap(): Promise<void> {
   const environment = loadApiEnvironment();
   const app = await NestFactory.create(AppModule);
-  const allowedOrigins = environment.CORS_ALLOWED_ORIGINS.split(",").map((origin) =>
-    origin.trim(),
+  const allowedOrigins = environment.CORS_ALLOWED_ORIGINS.split(",").map(
+    (origin) => origin.trim(),
   );
 
   app.setGlobalPrefix(environment.API_PREFIX.replace(/^\//, ""));
@@ -25,6 +25,8 @@ async function bootstrap(): Promise<void> {
 }
 
 void bootstrap().catch(() => {
-  console.error("API startup failed. Check the validated environment configuration.");
+  console.error(
+    "API startup failed. Check the validated environment configuration.",
+  );
   process.exitCode = 1;
 });

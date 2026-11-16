@@ -1,17 +1,18 @@
 # IMPLEMENTATION PLAN
+
 # Sistem Manajemen Operasional Pisciculture Farm Indonesia (PFI)
 
-| Informasi | Nilai |
-|---|---|
-| Dokumen | `implementation_plan.md` |
-| Versi | 1.0 |
-| Status | Draft rencana eksekusi berdasarkan PRD 1.0 dan Master Blueprint V4.5 |
-| Produk | Sistem Manajemen Operasional Pisciculture Farm Indonesia (PFI) |
-| Zona waktu bisnis | `Asia/Jakarta` (UTC+7) |
-| Basis database | PostgreSQL 13+ |
-| Autentikasi | JWT terverifikasi |
-| Pola transaksi | ACID, idempotency UUIDv4, audit log, dan locking sesuai kontrak |
-| Dokumen acuan | `master_blueprint_api_contract_pfi_main.md`, `prd.md`, dan `architecture.md` |
+| Informasi         | Nilai                                                                        |
+| ----------------- | ---------------------------------------------------------------------------- |
+| Dokumen           | `implementation_plan.md`                                                     |
+| Versi             | 1.0                                                                          |
+| Status            | Draft rencana eksekusi berdasarkan PRD 1.0 dan Master Blueprint V4.5         |
+| Produk            | Sistem Manajemen Operasional Pisciculture Farm Indonesia (PFI)               |
+| Zona waktu bisnis | `Asia/Jakarta` (UTC+7)                                                       |
+| Basis database    | PostgreSQL 13+                                                               |
+| Autentikasi       | JWT terverifikasi                                                            |
+| Pola transaksi    | ACID, idempotency UUIDv4, audit log, dan locking sesuai kontrak              |
+| Dokumen acuan     | `master_blueprint_api_contract_pfi_main.md`, `prd.md`, dan `architecture.md` |
 
 > **Tujuan dokumen:** menerjemahkan requirement dan kontrak yang telah disetujui menjadi urutan pekerjaan yang kecil, terukur, dan dapat dikerjakan dalam sesi AI terpisah. Dokumen ini bukan pengganti PRD atau Master Blueprint dan tidak boleh digunakan untuk mengubah keputusan di kedua dokumen tersebut.
 
@@ -35,14 +36,14 @@ Jika ada konflik, hentikan hanya pekerjaan yang terdampak. Laporkan nama dokumen
 
 ## 1.2 Status keputusan
 
-| Status | Makna | Cara implementasi |
-|---|---|---|
-| `LOCKED — V4.5` | Aturan Penerimaan dan VOID Penerimaan yang telah disetujui. | Implementasikan sesuai blueprint; perubahan perlu persetujuan pemilik produk. |
-| `LOCKED — BUSINESS` | Keputusan bisnis POS yang telah dikonfirmasi. | Perilaku bisnis tidak boleh diubah. Detail teknis tetap harus dikunci sebelum coding POS. |
-| `APPROVED — OWNER` | Keputusan arsitektur atau teknis yang disetujui pemilik produk pada `architecture.md`. | Berlaku sebagai acuan implementasi dan siap dikunci ke kontrak teknis final. |
-| `PROPOSED — TECHNICAL` | Rancangan teknis yang belum disetujui sebagai kontrak. | Boleh dianalisis dan direview; jangan dianggap final atau langsung dimigrasikan. |
-| `TBD — NEEDS DECISION` | Keputusan yang belum tersedia. | Buat catatan dan minta keputusan. Dilarang mengisi dengan tebakan. |
-| `OUT OF SCOPE` | Tidak termasuk MVP saat ini. | Jangan dibangun kecuali ruang lingkup diubah secara resmi. |
+| Status                 | Makna                                                                                  | Cara implementasi                                                                         |
+| ---------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `LOCKED — V4.5`        | Aturan Penerimaan dan VOID Penerimaan yang telah disetujui.                            | Implementasikan sesuai blueprint; perubahan perlu persetujuan pemilik produk.             |
+| `LOCKED — BUSINESS`    | Keputusan bisnis POS yang telah dikonfirmasi.                                          | Perilaku bisnis tidak boleh diubah. Detail teknis tetap harus dikunci sebelum coding POS. |
+| `APPROVED — OWNER`     | Keputusan arsitektur atau teknis yang disetujui pemilik produk pada `architecture.md`. | Berlaku sebagai acuan implementasi dan siap dikunci ke kontrak teknis final.              |
+| `PROPOSED — TECHNICAL` | Rancangan teknis yang belum disetujui sebagai kontrak.                                 | Boleh dianalisis dan direview; jangan dianggap final atau langsung dimigrasikan.          |
+| `TBD — NEEDS DECISION` | Keputusan yang belum tersedia.                                                         | Buat catatan dan minta keputusan. Dilarang mengisi dengan tebakan.                        |
+| `OUT OF SCOPE`         | Tidak termasuk MVP saat ini.                                                           | Jangan dibangun kecuali ruang lingkup diubah secara resmi.                                |
 
 ## 1.3 Aturan satu tugas satu sesi
 
@@ -75,6 +76,7 @@ Jika ada konflik, hentikan hanya pekerjaan yang terdampak. Laporkan nama dokumen
 ## 2.1 Termasuk dalam MVP
 
 ### Fondasi aplikasi
+
 - Login dan autentikasi JWT.
 - Pemeriksaan status akun dan RBAC.
 - Struktur aplikasi dan navigasi sesuai role.
@@ -82,6 +84,7 @@ Jika ada konflik, hentikan hanya pekerjaan yang terdampak. Laporkan nama dokumen
 - Migrasi database, seeding master spesies, audit log, dan idempotency.
 
 ### Penerimaan ikan dan batch — V4.5
+
 - Daftar penerimaan/batch.
 - Form penerimaan ikan.
 - Pembuatan satu batch otomatis untuk setiap penerimaan valid.
@@ -91,6 +94,7 @@ Jika ada konflik, hentikan hanya pekerjaan yang terdampak. Laporkan nama dokumen
 - Penghitungan stok berdasarkan transaksi valid yang sudah termasuk dalam cakupan sistem.
 
 ### Ikan Keluar — Kasir/POS
+
 - POS dengan satu batch untuk satu transaksi penjualan.
 - Harga berdasarkan kombinasi spesies dan ukuran.
 - Daftar harga yang dikelola Owner dan Admin Operasional.
@@ -175,6 +179,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 **Tujuan:** memetakan apa yang sudah ada dan apa yang belum tersedia.
 
 **Pekerjaan:**
+
 - Periksa struktur folder dan file.
 - Identifikasi frontend, backend, database layer, migration, test framework, dan konfigurasi build yang benar-benar ada.
 - Periksa apakah sudah ada skema database, tabel, endpoint, autentikasi, RBAC, UI, dan test.
@@ -185,6 +190,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 **Deliverable:** `repository_audit.md` atau laporan audit setara yang berisi fakta `EXISTS`, `MISSING`, `PARTIAL`, dan `CONFLICT`.
 
 **Acceptance criteria:**
+
 - Tidak ada klaim stack atau fitur tanpa bukti dari repository.
 - Semua temuan penting memiliki path file atau perintah pemeriksaan.
 - Tidak ada file aplikasi yang diubah pada tugas audit ini.
@@ -194,6 +200,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 **Tujuan:** mencatat pilihan stack yang telah disetujui pemilik produk melalui ADR 0001 dan menyelesaikan keputusan teknis yang masih terbuka.
 
 **Keputusan yang telah dikunci pada ADR 0001:**
+
 - npm workspaces monorepo: `apps/api`, `apps/web`, `packages/shared`.
 - NestJS + TypeScript, Next.js App Router, Prisma + PostgreSQL/raw SQL berparameter.
 - Zod + class-validator, Tailwind CSS + shadcn/ui, Jest + Supertest.
@@ -207,6 +214,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 **Deliverable:** ADR 0001 dan konfigurasi workspace yang sesuai. Pilihan stack tidak boleh disimpulkan dari preferensi AI.
 
 **Acceptance criteria:**
+
 - Setiap pilihan memiliki alasan, dampak, dan status persetujuan.
 - Tidak ada asumsi bahwa teknologi tertentu telah disetujui sebelum pemilik proyek mengesahkannya.
 
@@ -215,6 +223,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 **Tujuan:** membuat pengembangan dapat diulang dan diverifikasi.
 
 **Pekerjaan:**
+
 - Tetapkan struktur branch dan aturan pull request/review.
 - Siapkan environment lokal dan staging sesuai keputusan stack.
 - Pisahkan konfigurasi development, test, staging, dan production.
@@ -235,6 +244,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Task P1-01 — Pemetaan domain dan requirement ke modul
 
 **Pekerjaan:**
+
 - Petakan `users`, `fish_species`, `batch_daily_sequences`, `batches`, `incoming_fish`, `incoming_fish_voids`, `idempotency_keys`, dan `audit_logs`.
 - Petakan hubungan satu penerimaan dengan satu batch.
 - Petakan status batch `active`, `completed`, dan `voided`.
@@ -248,6 +258,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Task P1-02 — Review dan lengkapi kontrak API V4.5
 
 **Pekerjaan:**
+
 - Petakan endpoint mutasi penerimaan (`POST /api/v1/fish-entries`) dan VOID (`POST /api/v1/fish-entries/{batch_id}/void`) yang sudah dikunci.
 - Dokumentasikan skema request/response, parameter query, dan error code untuk endpoint autentikasi dan pembacaan data V4.5 yang belum dirinci di blueprint (`POST /api/v1/auth/login`, `GET /api/v1/fish-species`, `GET /api/v1/batches`, `GET /api/v1/batches/{id}`, dan `GET /api/v1/audit-logs`).
 - Konfirmasi header Authorization, `Idempotency-Key` UUIDv4, dan `Content-Type`.
@@ -262,6 +273,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Task P1-03 — Rencana migrasi dan perlindungan data
 
 **Pekerjaan:**
+
 - Ubah data dictionary V4.5 menjadi urutan migration yang dapat diulang.
 - Tetapkan constraint, unique index, foreign key, trigger, dan granular runtime privileges sesuai blueprint.
 - Pastikan tabel transaksi historis dan audit bersifat append-only.
@@ -281,6 +293,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Task P2-01 — Siapkan database dan migration framework
 
 **Pekerjaan:**
+
 - Siapkan database development dan test PostgreSQL 13+.
 - Konfigurasikan koneksi backend menggunakan secret dari environment.
 - Pasang migration framework sesuai keputusan stack.
@@ -293,6 +306,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Task P2-02 — Buat tabel master dan pengguna V4.5
 
 **Pekerjaan:**
+
 - Implementasikan struktur `users` sesuai data dictionary.
 - Implementasikan `fish_species`.
 - Terapkan normalisasi email dan unique index sesuai blueprint.
@@ -306,6 +320,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Task P2-03 — Buat tabel batch dan penerimaan
 
 **Pekerjaan:**
+
 - Implementasikan `batch_daily_sequences`.
 - Implementasikan `batches`.
 - Implementasikan `incoming_fish` dan `incoming_fish_voids`.
@@ -320,6 +335,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Task P2-04 — Buat idempotency dan audit log
 
 **Pekerjaan:**
+
 - Implementasikan `idempotency_keys` sesuai aturan unique scope user + endpoint + key.
 - Implementasikan penyimpanan hash payload yang dinormalisasi.
 - Implementasikan `audit_logs` append-only.
@@ -333,6 +349,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Task P2-05 — Uji constraint, trigger, dan sequence database
 
 **Pekerjaan:**
+
 - Uji unique constraint, foreign key, check constraint, deferred constraint trigger, dan status guard.
 - Uji inisialisasi sequence saat tanggal baru.
 - Uji sequence batch yang mencapai batas 999 dan respons yang ditentukan V4.5.
@@ -352,6 +369,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Task P3-01 — Implementasikan login JWT
 
 **Pekerjaan:**
+
 - Implementasikan autentikasi menggunakan JWT terverifikasi.
 - Verifikasi status akun aktif.
 - Ambil identitas user dan role dari claims/token yang telah diverifikasi.
@@ -365,6 +383,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Task P3-02 — Implementasikan RBAC backend
 
 **Pekerjaan:**
+
 - Terapkan satu role per pengguna untuk MVP.
 - Implementasikan role V4.5: `Owner`, `Admin Operasional`, dan `Kepala Budidaya`.
 - Terapkan hak akses per endpoint sesuai matriks V4.5.
@@ -373,6 +392,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 **Deliverable:** middleware/policy RBAC dan test matrix.
 
 **Acceptance criteria:**
+
 - Owner tidak dapat membuat penerimaan atau melakukan VOID penerimaan.
 - Admin Operasional dapat membuat dan melakukan VOID penerimaan sesuai aturan.
 - Kepala Budidaya dapat membuat penerimaan tetapi tidak dapat melakukan VOID penerimaan.
@@ -381,6 +401,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Task P3-03 — Tetapkan provisioning akun awal
 
 **Pekerjaan:**
+
 - Gunakan keputusan pada Task P0-02 tentang pembuatan akun awal.
 - Dokumentasikan proses membuat akun uji dan akun operasional pertama.
 - Jangan membuat halaman administrasi pengguna, registrasi publik, atau reset kata sandi tanpa keputusan produk.
@@ -400,6 +421,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 **Requirement utama:** FR-REC-01 sampai FR-REC-04, FR-REC-06, FR-BATCH-01.
 
 **Pekerjaan:**
+
 - Implementasikan `POST /api/v1/fish-entries` sesuai kontrak V4.5.
 - Validasi JWT, role, payload, tanggal `Asia/Jakarta`, spesies aktif, enum ukuran, dan batas numerik.
 - Buat batch dan penerimaan secara atomik.
@@ -416,6 +438,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 **Requirement utama:** FR-REC-05.
 
 **Pekerjaan:**
+
 - Buat endpoint daftar penerimaan/batch sesuai hak akses.
 - Buat endpoint detail batch/penerimaan.
 - Sajikan status batch dan stok hasil kalkulasi, bukan input stok manual.
@@ -430,6 +453,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 **Requirement utama:** FR-REC-07 sampai FR-REC-09.
 
 **Pekerjaan:**
+
 - Implementasikan endpoint VOID sesuai kontrak V4.5.
 - Hanya Admin Operasional yang dapat melakukan VOID penerimaan.
 - Alasan VOID wajib.
@@ -447,6 +471,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 **Requirement utama:** FR-AUD-01.
 
 **Pekerjaan:**
+
 - Implementasikan query baca audit log.
 - Terapkan akses sesuai matriks V4.5: Owner, Admin Operasional, dan Kepala Budidaya.
 - Tampilkan identitas pelaku, tindakan, waktu, serta referensi objek yang tersedia dalam kontrak.
@@ -465,6 +490,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Task P5-01 — Buat fondasi UI dan navigasi berdasarkan role
 
 **Pekerjaan:**
+
 - Buat application shell, layout responsif, komponen form, tabel, dialog konfirmasi, dan komponen pesan error.
 - Buat routing halaman berdasarkan autentikasi dan role.
 - Menu yang tidak berhak diakses tidak ditampilkan, tetapi backend tetap menjadi otoritas akses.
@@ -477,6 +503,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Task P5-02 — Buat halaman Login (PG-01)
 
 **Pekerjaan:**
+
 - Input email dan kata sandi.
 - Integrasi ke API autentikasi.
 - Tangani kredensial salah, akun nonaktif, token kedaluwarsa, dan server tidak tersedia.
@@ -489,6 +516,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Task P5-03 — Buat daftar Penerimaan/Batch (PG-02)
 
 **Pekerjaan:**
+
 - Tampilkan informasi minimum sesuai PRD.
 - Tampilkan status batch dan stok terhitung.
 - Integrasikan API daftar.
@@ -501,6 +529,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Task P5-04 — Buat Form Penerimaan Ikan (PG-03)
 
 **Pekerjaan:**
+
 - Buat field dan validasi sesuai V4.5.
 - Tampilkan daftar spesies aktif dan ukuran resmi.
 - Jangan mengisi nilai modal default `0.00` secara otomatis.
@@ -515,6 +544,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Task P5-05 — Buat Detail Batch dan VOID Penerimaan (PG-04/PG-05)
 
 **Pekerjaan:**
+
 - Tampilkan detail penerimaan/batch.
 - Tampilkan aksi sesuai role dan status.
 - Form alasan VOID wajib.
@@ -528,6 +558,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Task P5-06 — Buat halaman Audit Log (PG-06)
 
 **Pekerjaan:**
+
 - Tampilkan data audit minimum yang disediakan API.
 - Terapkan akses Owner, Admin Operasional, dan Kepala Budidaya.
 - Tidak menyediakan aksi edit/hapus.
@@ -545,6 +576,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Task P6-01 — Unit test domain dan validator
 
 **Pekerjaan:**
+
 - Uji batas input dan normalisasi payload.
 - Uji aturan tanggal `Asia/Jakarta`.
 - Uji penghitungan status batch dan stok.
@@ -557,6 +589,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Task P6-02 — Integration test database dan API
 
 **Pekerjaan:**
+
 - Uji penerimaan lengkap dan invalid.
 - Uji idempotency retry dan idempotency mismatch.
 - Uji sequence dan concurrency.
@@ -572,6 +605,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Task P6-03 — Jalankan 32 Test Cases V4.5
 
 **Pekerjaan:**
+
 - Jalankan TC-01 sampai TC-32 dari Master Blueprint.
 - Catat hasil `PASS`, `FAIL`, atau `BLOCKED` beserta bukti log.
 - Perbaiki kegagalan dalam Task ID terpisah.
@@ -584,6 +618,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Task P6-04 — Uji performance dan security V4.5
 
 **Pekerjaan:**
+
 - Siapkan staging sesuai spesifikasi minimum blueprint: 2 vCPU, 4 GB RAM, database berisi minimal 100.000 record.
 - Jalankan 50 concurrent requests untuk penyimpanan penerimaan.
 - Ukur p95 response time dan bandingkan dengan target maksimal 1,5 detik.
@@ -596,6 +631,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 ## Gate V4.5 — Persetujuan sebelum POS
 
 Gate dinyatakan lulus hanya jika:
+
 - [ ] Seluruh 32 test case V4.5 lulus.
 - [ ] Regression test tidak menemukan kerusakan fungsi.
 - [ ] Migration dan seed berhasil pada database PostgreSQL 13+ yang bersih.
@@ -612,23 +648,24 @@ Gate dinyatakan lulus hanya jika:
 
 ## Task GPOS-01 — Verifikasi keputusan owner & selesaikan sisa TBD POS
 
-| TBD | Status Terkini | Keputusan / Sisa tindakan yang dibutuhkan |
-|---|---|---|
-| TBD-01 | `APPROVED — OWNER` | Ditetapkan batas harga Rp 1 s.d. Rp 10.000.000 per ekor (`BIGINT`, Rupiah bulat tanpa desimal). |
-| TBD-02 | `APPROVED — OWNER` | Audit perubahan harga (`action = 'UPDATE_PRICE'`) hanya mencatat aktor dan waktu (`old_values = NULL`, `new_values = NULL`). |
-| TBD-03 | `TBD — NEEDS DECISION` | Pendekatan ESC/POS Bluetooth (mobile) & Web USB/Browser Print (PC/laptop) disetujui, namun merek/model printer, solusi bridge Bluetooth iOS/iPhone, dan uji perangkat aktual tetap wajib diselesaikan di `GPOS-04`. |
-| TBD-04 | `TBD — NEEDS DECISION` | Request/response body, error code (termasuk rollback konkurensi/harga berubah dan kewajiban `Idempotency-Key` baru), serta strategi refresh dan konfirmasi harga API POS wajib dikunci di `GPOS-03`. Pagination/filter dasar mengikuti ADR 0001, tetapi envelope final POS tetap bagian kontrak API. |
-| TBD-05 | `APPROVED — OWNER` | Menggunakan tabel `sale_daily_sequences` (`sale_date DATE PRIMARY KEY`, `last_number BIGINT`) tanpa batas 999. |
-| TBD-06 | `APPROVED — OWNER` *(Actions)* / `TBD` *(DDL/Privileges)* | Nilai `action` (`CREATE_SALE`, `VOID_SALE`, `UPDATE_PRICE`) disetujui; `ALTER CONSTRAINT` DDL, trigger imutabilitas, index, dan `GRANT`/`REVOKE` runtime POS dikunci di `GPOS-02`. |
-| TBD-07 | `APPROVED — OWNER` | Role `Kasir` dilarang (`Forbidden`) mengakses data maupun halaman Audit Log. |
-| TBD-08 | `PARTIALLY RESOLVED — OWNER` (ADR 0001) | Provisioning awal `Owner` lokal melalui CLI idempoten dari `.env` telah disetujui. Deaktivasi akun, perubahan role, reset kata sandi, dan administrasi pengguna tetap TBD. |
-| TBD-09 | `APPROVED — OWNER` (ADR 0001) | Default `page=1`, `limit=20`, maksimum `100`; rentang tanggal ISO 8601 pada timestamp utama, status hanya enum resmi, urutan default `DESC`. Pencarian dan pilihan sort tambahan belum disetujui. |
+| TBD    | Status Terkini                                            | Keputusan / Sisa tindakan yang dibutuhkan                                                                                                                                                                                                                                                            |
+| ------ | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TBD-01 | `APPROVED — OWNER`                                        | Ditetapkan batas harga Rp 1 s.d. Rp 10.000.000 per ekor (`BIGINT`, Rupiah bulat tanpa desimal).                                                                                                                                                                                                      |
+| TBD-02 | `APPROVED — OWNER`                                        | Audit perubahan harga (`action = 'UPDATE_PRICE'`) hanya mencatat aktor dan waktu (`old_values = NULL`, `new_values = NULL`).                                                                                                                                                                         |
+| TBD-03 | `TBD — NEEDS DECISION`                                    | Pendekatan ESC/POS Bluetooth (mobile) & Web USB/Browser Print (PC/laptop) disetujui, namun merek/model printer, solusi bridge Bluetooth iOS/iPhone, dan uji perangkat aktual tetap wajib diselesaikan di `GPOS-04`.                                                                                  |
+| TBD-04 | `TBD — NEEDS DECISION`                                    | Request/response body, error code (termasuk rollback konkurensi/harga berubah dan kewajiban `Idempotency-Key` baru), serta strategi refresh dan konfirmasi harga API POS wajib dikunci di `GPOS-03`. Pagination/filter dasar mengikuti ADR 0001, tetapi envelope final POS tetap bagian kontrak API. |
+| TBD-05 | `APPROVED — OWNER`                                        | Menggunakan tabel `sale_daily_sequences` (`sale_date DATE PRIMARY KEY`, `last_number BIGINT`) tanpa batas 999.                                                                                                                                                                                       |
+| TBD-06 | `APPROVED — OWNER` _(Actions)_ / `TBD` _(DDL/Privileges)_ | Nilai `action` (`CREATE_SALE`, `VOID_SALE`, `UPDATE_PRICE`) disetujui; `ALTER CONSTRAINT` DDL, trigger imutabilitas, index, dan `GRANT`/`REVOKE` runtime POS dikunci di `GPOS-02`.                                                                                                                   |
+| TBD-07 | `APPROVED — OWNER`                                        | Role `Kasir` dilarang (`Forbidden`) mengakses data maupun halaman Audit Log.                                                                                                                                                                                                                         |
+| TBD-08 | `PARTIALLY RESOLVED — OWNER` (ADR 0001)                   | Provisioning awal `Owner` lokal melalui CLI idempoten dari `.env` telah disetujui. Deaktivasi akun, perubahan role, reset kata sandi, dan administrasi pengguna tetap TBD.                                                                                                                           |
+| TBD-09 | `APPROVED — OWNER` (ADR 0001)                             | Default `page=1`, `limit=20`, maksimum `100`; rentang tanggal ISO 8601 pada timestamp utama, status hanya enum resmi, urutan default `DESC`. Pencarian dan pilihan sort tambahan belum disetujui.                                                                                                    |
 
 **Deliverable:** daftar keputusan yang seluruh barisnya memiliki status `APPROVED`, `REJECTED`, atau `DEFERRED` dengan dampak yang jelas. Baris yang memblokir desain tidak boleh dibiarkan kosong.
 
 ## Task GPOS-02 — Finalisasi data model POS
 
 **Pekerjaan:**
+
 - Review rancangan konseptual `fish_sale_prices`, `fish_sales`, `fish_sale_voids`, dan sequence penjualan.
 - Konfirmasi apakah rancangan tabel perlu diselaraskan dengan skema nyata V4.5.
 - Konfirmasi unique constraints, foreign keys, indexes, check constraints, trigger, dan privilege runtime.
@@ -642,6 +679,7 @@ Gate dinyatakan lulus hanya jika:
 ## Task GPOS-03 — Finalisasi API Contract POS
 
 **Pekerjaan:**
+
 - Finalisasi endpoint harga, POS batch list, create sale, sale list/detail, void sale, dan receipt retrieval sesuai cakupan PRD.
 - Finalisasi payload, response, validasi, error code, pagination (jika disetujui), dan idempotency.
 - Tentukan perilaku perubahan harga ketika kasir sedang menyelesaikan transaksi.
@@ -652,6 +690,7 @@ Gate dinyatakan lulus hanya jika:
 ## Task GPOS-04 — Proof-of-concept printer dan persetujuan desain UI POS
 
 **Pekerjaan:**
+
 - Inventarisasi perangkat kasir aktual dan printer yang tersedia.
 - Uji pairing dan kemampuan cetak dari perangkat aktual.
 - Pastikan strategi mendukung layout 58 mm dan 80 mm.
@@ -680,6 +719,7 @@ Gate dinyatakan lulus hanya jika:
 ## Task P7-01 — Perluas role dan RBAC untuk Kasir
 
 **Pekerjaan:**
+
 - Tambahkan role `Kasir` melalui migration yang aman.
 - Pertahankan tiga role dan privilege V4.5.
 - Implementasikan akses POS untuk Owner, Admin Operasional, dan Kasir.
@@ -694,6 +734,7 @@ Gate dinyatakan lulus hanya jika:
 ## Task P7-02 — Implementasikan database daftar harga
 
 **Pekerjaan:**
+
 - Implementasikan penyimpanan harga berdasarkan `species_id + fish_size`.
 - Terapkan satu harga aktif untuk satu kombinasi spesies dan ukuran.
 - Harga berupa integer Rupiah, tanpa pecahan.
@@ -708,6 +749,7 @@ Gate dinyatakan lulus hanya jika:
 ## Task P7-03 — Implementasikan database penjualan dan sequence
 
 **Pekerjaan:**
+
 - Implementasikan tabel penjualan dan record VOID sesuai data model yang disetujui.
 - Implementasikan sequence nomor penjualan `PFI-SAL-YYYYMMDD-XXX`.
 - Sequence harian harus unik, atomik, dan dapat melewati 999.
@@ -722,6 +764,7 @@ Gate dinyatakan lulus hanya jika:
 ## Task P7-04 — Implementasikan query stok dan daftar batch POS
 
 **Pekerjaan:**
+
 - Buat query batch yang hanya menampilkan batch `active` dengan stok valid > 0.
 - Hitung stok dari transaksi valid, bukan kolom stok manual yang bisa diedit.
 - Siapkan mekanisme locking batch dan validasi ulang stok.
@@ -735,6 +778,7 @@ Gate dinyatakan lulus hanya jika:
 ## Task P7-05 — Implementasikan API pembuatan penjualan
 
 **Pekerjaan:**
+
 - Validasi JWT, role POS, request schema, idempotency UUIDv4, status batch, stok, harga, quantity, dan pembayaran.
 - Jika quantity melebihi stok saat ini, backend mengembalikan kondisi yang memungkinkan UI menampilkan quantity yang dibatasi dan meminta konfirmasi; keputusan akhir tetap harus tervalidasi lagi sebelum commit.
 - Refresh dan validasi harga sebelum transaksi disimpan.
@@ -750,6 +794,7 @@ Gate dinyatakan lulus hanya jika:
 ## Task P7-06 — Implementasikan API daftar/detail/VOID penjualan
 
 **Pekerjaan:**
+
 - Buat API daftar dan detail penjualan untuk seluruh role POS.
 - Implementasikan VOID satu transaksi secara utuh, tanpa alasan wajib.
 - Semua role POS dapat VOID transaksi yang belum pernah di-VOID.
@@ -764,6 +809,7 @@ Gate dinyatakan lulus hanya jika:
 ## Task P7-07 — Implementasikan data struk dan otorisasi cetak ulang
 
 **Pekerjaan:**
+
 - Sediakan data struk sesuai konten wajib PRD.
 - Nomor penjualan internal dan kode batch tidak boleh dicetak.
 - Hanya pembuat transaksi yang boleh meminta cetak ulang.
@@ -783,6 +829,7 @@ Gate dinyatakan lulus hanya jika:
 ## Task P8-01 — Buat halaman POS/Kasir (PG-07)
 
 **Pekerjaan:**
+
 - Tampilkan hanya batch aktif dengan stok > 0.
 - Pilih satu batch untuk satu transaksi.
 - Input quantity menggunakan satuan ekor.
@@ -800,6 +847,7 @@ Gate dinyatakan lulus hanya jika:
 ## Task P8-02 — Buat halaman Daftar Harga (PG-08)
 
 **Pekerjaan:**
+
 - Tampilkan harga per spesies dan ukuran.
 - Owner/Admin dapat menambah serta mengubah harga.
 - Kasir tidak mendapatkan kontrol ubah harga.
@@ -813,6 +861,7 @@ Gate dinyatakan lulus hanya jika:
 ## Task P8-03 — Buat halaman Daftar Penjualan (PG-09)
 
 **Pekerjaan:**
+
 - Semua role POS dapat melihat seluruh penjualan.
 - Tampilkan data minimum pada PRD: nomor internal, waktu, batch internal, spesies/ukuran, quantity, harga, total, metode pembayaran, pembuat, dan status.
 - Terapkan pencarian/filter/pagination hanya jika telah disetujui pada TBD-09.
@@ -824,6 +873,7 @@ Gate dinyatakan lulus hanya jika:
 ## Task P8-04 — Buat Detail Penjualan dan alur VOID (PG-10)
 
 **Pekerjaan:**
+
 - Tampilkan informasi detail penjualan.
 - Sediakan aksi VOID bagi role POS untuk transaksi yang belum VOID.
 - Minta konfirmasi sebelum VOID; jangan meminta alasan wajib.
@@ -841,6 +891,7 @@ Gate dinyatakan lulus hanya jika:
 ## Task P9-01 — Implementasikan layout struk 58 mm dan 80 mm
 
 **Konten wajib dan hanya konten berikut:**
+
 - Nama perusahaan Pisciculture Farm Indonesia.
 - Tanggal dan waktu.
 - Spesies ikan.
@@ -860,6 +911,7 @@ Gate dinyatakan lulus hanya jika:
 ## Task P9-02 — Integrasikan auto-print dan reprint
 
 **Pekerjaan:**
+
 - Jalankan proses cetak setelah penjualan berhasil commit.
 - Pisahkan status transaksi dari status printer.
 - Jika printer tidak tersedia/gagal, tampilkan kegagalan cetak tanpa menyatakan transaksi gagal.
@@ -874,6 +926,7 @@ Gate dinyatakan lulus hanya jika:
 ## Task P9-03 — Uji printer lintas perangkat yang disepakati
 
 **Pekerjaan:**
+
 - Uji pairing dan cetak pada perangkat aktual yang disepakati.
 - Uji Android, iPhone, PC, atau laptop hanya sesuai kombinasi perangkat/printer yang benar-benar dipilih.
 - Uji kertas 58 mm dan 80 mm.
@@ -886,6 +939,7 @@ Gate dinyatakan lulus hanya jika:
 ## Task P9-04 — Jalankan QA POS
 
 **Pekerjaan:**
+
 - Uji price missing dan harga berubah sebelum commit.
 - Uji batas quantity, stok berubah, batch completed, dan batch voided.
 - Uji Tunai, kekurangan uang, uang pas, dan kembalian.
@@ -910,6 +964,7 @@ Gate dinyatakan lulus hanya jika:
 ## Task P10-01 — Siapkan production environment
 
 **Pekerjaan:**
+
 - Siapkan host, database PostgreSQL, domain/TLS, network rules, dan runtime berdasarkan keputusan deployment.
 - Pisahkan secret production dari repository.
 - Batasi akses database dan panel administrasi.
@@ -920,6 +975,7 @@ Gate dinyatakan lulus hanya jika:
 ## Task P10-02 — Siapkan backup, restore, dan retensi data operasional
 
 **Pekerjaan:**
+
 - Tentukan jadwal backup dan retensi berdasarkan persetujuan operasional.
 - Simpan backup di lokasi terpisah dari instance database utama.
 - Uji restore ke environment terisolasi.
@@ -933,6 +989,7 @@ Gate dinyatakan lulus hanya jika:
 ## Task P10-03 — Release candidate dan smoke test
 
 **Pekerjaan:**
+
 - Buat release candidate dari branch yang telah direview.
 - Jalankan migration production secara terkontrol dan backup sebelum perubahan berisiko.
 - Jalankan smoke test login, RBAC, penerimaan, daftar batch, VOID sesuai role, audit, POS, harga, penjualan, VOID penjualan, dan cetak.
@@ -945,6 +1002,7 @@ Gate dinyatakan lulus hanya jika:
 ## Task P10-04 — Handover operasional
 
 **Pekerjaan:**
+
 - Tulis panduan singkat untuk Owner, Admin Operasional, Kepala Budidaya, dan Kasir sesuai hak akses.
 - Dokumentasikan prosedur bila penerimaan gagal, VOID ditolak, pembayaran berhasil tetapi printer gagal, atau koneksi database terputus.
 - Dokumentasikan kontak/penanggung jawab teknis berdasarkan struktur PFI yang ditentukan pemilik proyek.
@@ -1001,6 +1059,7 @@ Jangan mengklaim DONE apabila acceptance criteria belum terbukti.
 ## 17.1 Definition of Ready (DoR)
 
 Satu Task ID boleh dimulai jika:
+
 - [ ] Tujuan dan batas scope Task ID jelas.
 - [ ] Requirement ID dari PRD/Blueprint telah dicantumkan.
 - [ ] Status keputusan sudah diketahui.
@@ -1014,6 +1073,7 @@ Satu Task ID boleh dimulai jika:
 ## 17.2 Definition of Done (DoD)
 
 Satu Task ID dinyatakan selesai jika:
+
 - [ ] Implementasi hanya mencakup scope yang disepakati.
 - [ ] Tidak ada perubahan aturan bisnis tanpa persetujuan.
 - [ ] Validasi dan otorisasi diterapkan pada lapisan yang tepat.
@@ -1027,20 +1087,20 @@ Satu Task ID dinyatakan selesai jika:
 
 # 18. Daftar risiko dan mitigasi
 
-| Risiko | Dampak | Mitigasi/gerbang |
-|---|---|---|
-| Stack dipilih tanpa audit repository | Rework dan konflik dependency | P0-01 wajib sebelum keputusan stack dan coding. |
-| AI mengarang keputusan TBD | Skema/API berubah berulang | Gunakan Gate POS dan larangan asumsi. |
-| Role hanya dibatasi pada frontend | Akses ilegal melalui API | RBAC backend dan privilege database wajib diuji. |
-| Request diulang akibat jaringan | Transaksi ganda | Idempotency UUIDv4 dan payload hash. |
-| Dua pengguna mengubah stok bersamaan | Overselling/stok negatif | Batch row locking dan validasi stok ulang dalam transaksi. |
-| Audit gagal tersimpan | Aksi bisnis tanpa jejak | Audit berada dalam transaksi ACID yang sama. |
-| Data penerimaan/penjualan diubah atau dihapus | Histori tidak dapat dipercaya | Append-only, reversal, trigger, dan runtime privileges. |
-| Perubahan daftar harga mengubah transaksi lama | Nilai transaksi historis berubah | Snapshot harga pada saat penjualan. |
-| Printer gagal setelah transaksi tersimpan | Kasir mengulang penjualan | Pisahkan commit transaksi dari status proses cetak. |
-| Printer tidak kompatibel dengan perangkat | Cetak tidak berjalan saat operasional | Uji model/perangkat aktual sebelum integrasi final. |
-| Modul kematian belum ada | Stok belum mencakup gerakan kematian | Jangan mengarang modul; dokumentasikan batas perhitungan sampai spesifikasi fase kematian disetujui. |
-| Deployment tanpa backup teruji | Kehilangan data saat insiden | Backup dan restore test wajib sebelum go-live. |
+| Risiko                                         | Dampak                                | Mitigasi/gerbang                                                                                     |
+| ---------------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Stack dipilih tanpa audit repository           | Rework dan konflik dependency         | P0-01 wajib sebelum keputusan stack dan coding.                                                      |
+| AI mengarang keputusan TBD                     | Skema/API berubah berulang            | Gunakan Gate POS dan larangan asumsi.                                                                |
+| Role hanya dibatasi pada frontend              | Akses ilegal melalui API              | RBAC backend dan privilege database wajib diuji.                                                     |
+| Request diulang akibat jaringan                | Transaksi ganda                       | Idempotency UUIDv4 dan payload hash.                                                                 |
+| Dua pengguna mengubah stok bersamaan           | Overselling/stok negatif              | Batch row locking dan validasi stok ulang dalam transaksi.                                           |
+| Audit gagal tersimpan                          | Aksi bisnis tanpa jejak               | Audit berada dalam transaksi ACID yang sama.                                                         |
+| Data penerimaan/penjualan diubah atau dihapus  | Histori tidak dapat dipercaya         | Append-only, reversal, trigger, dan runtime privileges.                                              |
+| Perubahan daftar harga mengubah transaksi lama | Nilai transaksi historis berubah      | Snapshot harga pada saat penjualan.                                                                  |
+| Printer gagal setelah transaksi tersimpan      | Kasir mengulang penjualan             | Pisahkan commit transaksi dari status proses cetak.                                                  |
+| Printer tidak kompatibel dengan perangkat      | Cetak tidak berjalan saat operasional | Uji model/perangkat aktual sebelum integrasi final.                                                  |
+| Modul kematian belum ada                       | Stok belum mencakup gerakan kematian  | Jangan mengarang modul; dokumentasikan batas perhitungan sampai spesifikasi fase kematian disetujui. |
+| Deployment tanpa backup teruji                 | Kehilangan data saat insiden          | Backup dan restore test wajib sebelum go-live.                                                       |
 
 ---
 
@@ -1048,21 +1108,21 @@ Satu Task ID dinyatakan selesai jika:
 
 Gunakan pemetaan berikut sebagai minimum traceability. Detail test case harus diturunkan dari PRD dan Master Blueprint, bukan dibuat dengan mengubah aturan sumber.
 
-| Area | Requirement utama | Phase implementasi | Bukti akhir |
-|---|---|---|---|
-| Authentication | FR-AUTH-01 s.d. FR-AUTH-03 | Phase 3 | Auth unit/integration tests |
-| Penerimaan | FR-REC-01 s.d. FR-REC-09 | Phase 2, 4, 5 | TC-01 s.d. TC-32 dan acceptance PRD |
-| Batch dan stok | FR-BATCH-01 s.d. FR-BATCH-04 | Phase 2, 4, 6, 7 | Constraint, stock tests, concurrency tests |
-| POS | FR-POS-01 s.d. FR-POS-05 | Gate POS, Phase 7–9 | POS workflow tests |
-| Harga | FR-PRICE-01 s.d. FR-PRICE-07 | Gate POS, Phase 7–8 | Price CRUD, snapshot, authorization tests |
-| Penjualan | FR-SALE-01 s.d. FR-SALE-04 | Phase 7–9 | Sale transaction, sequence, history tests |
-| Pembayaran | FR-PAY-01 s.d. FR-PAY-03 | Phase 7–8 | Cash/transfer boundary tests |
-| VOID penjualan | FR-VOID-SALE-01 s.d. FR-VOID-SALE-03 | Phase 7–9 | Reversal, stock restoration, repeated VOID tests |
-| Printing | FR-PRINT-01 s.d. FR-PRINT-05 | Gate POS, Phase 7–9 | Receipt content, printer matrix, failure/reprint tests |
-| Audit | FR-AUD-01 | Phase 2, 4, 7 | Atomic audit and access tests |
-| Idempotency | FR-IDEM-01 | Phase 2, 4, 7 | Retry and payload mismatch tests |
-| Concurrency | FR-CONC-01 | Phase 4, 6, 7, 9 | Locking and overselling tests |
-| NFR | NFR-SEC, DATA, TRANS, TIME, PERF, PRINT, UX, REG | Phase 2–10 | Security, load, regression, and operational reports |
+| Area           | Requirement utama                                | Phase implementasi  | Bukti akhir                                            |
+| -------------- | ------------------------------------------------ | ------------------- | ------------------------------------------------------ |
+| Authentication | FR-AUTH-01 s.d. FR-AUTH-03                       | Phase 3             | Auth unit/integration tests                            |
+| Penerimaan     | FR-REC-01 s.d. FR-REC-09                         | Phase 2, 4, 5       | TC-01 s.d. TC-32 dan acceptance PRD                    |
+| Batch dan stok | FR-BATCH-01 s.d. FR-BATCH-04                     | Phase 2, 4, 6, 7    | Constraint, stock tests, concurrency tests             |
+| POS            | FR-POS-01 s.d. FR-POS-05                         | Gate POS, Phase 7–9 | POS workflow tests                                     |
+| Harga          | FR-PRICE-01 s.d. FR-PRICE-07                     | Gate POS, Phase 7–8 | Price CRUD, snapshot, authorization tests              |
+| Penjualan      | FR-SALE-01 s.d. FR-SALE-04                       | Phase 7–9           | Sale transaction, sequence, history tests              |
+| Pembayaran     | FR-PAY-01 s.d. FR-PAY-03                         | Phase 7–8           | Cash/transfer boundary tests                           |
+| VOID penjualan | FR-VOID-SALE-01 s.d. FR-VOID-SALE-03             | Phase 7–9           | Reversal, stock restoration, repeated VOID tests       |
+| Printing       | FR-PRINT-01 s.d. FR-PRINT-05                     | Gate POS, Phase 7–9 | Receipt content, printer matrix, failure/reprint tests |
+| Audit          | FR-AUD-01                                        | Phase 2, 4, 7       | Atomic audit and access tests                          |
+| Idempotency    | FR-IDEM-01                                       | Phase 2, 4, 7       | Retry and payload mismatch tests                       |
+| Concurrency    | FR-CONC-01                                       | Phase 4, 6, 7, 9    | Locking and overselling tests                          |
+| NFR            | NFR-SEC, DATA, TRANS, TIME, PERF, PRINT, UX, REG | Phase 2–10          | Security, load, regression, and operational reports    |
 
 ---
 
@@ -1092,8 +1152,8 @@ MVP dapat dinyatakan siap go-live hanya jika seluruh poin berikut terpenuhi:
 
 # 21. Riwayat dokumen
 
-| Versi | Perubahan |
-|---|---|
-| 1.0 | Rencana implementasi modular berdasarkan PRD 1.0, Master Blueprint V4.5, dan keputusan bisnis POS. Memisahkan implementasi V4.5 dari gerbang persetujuan teknis POS. |
+| Versi | Perubahan                                                                                                                                                            |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0   | Rencana implementasi modular berdasarkan PRD 1.0, Master Blueprint V4.5, dan keputusan bisnis POS. Memisahkan implementasi V4.5 dari gerbang persetujuan teknis POS. |
 
 **Akhir dokumen.**

@@ -5,7 +5,12 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["**/node_modules/**", "**/dist/**", "**/.next/**", "package-lock.json"],
+    ignores: [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/.next/**",
+      "package-lock.json",
+    ],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,

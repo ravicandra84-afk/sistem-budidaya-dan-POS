@@ -6,7 +6,9 @@ export const metadata: Metadata = {
   title: "PFI Operational System",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+export default function RootLayout({
+  children,
+}: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="id">
       <body>{children}</body>

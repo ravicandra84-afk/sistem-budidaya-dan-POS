@@ -19,7 +19,9 @@ describe("API environment validation", () => {
   });
 
   it("fails fast when required configuration is missing", () => {
-    expect(() => loadApiEnvironment({})).toThrow("Invalid API environment configuration");
+    expect(() => loadApiEnvironment({})).toThrow(
+      "Invalid API environment configuration",
+    );
   });
 
   it("rejects the example runtime database user", () => {

@@ -1,16 +1,17 @@
 # PRODUCT REQUIREMENTS DOCUMENT (PRD)
+
 # Sistem Manajemen Operasional Pisciculture Farm Indonesia (PFI)
 
-| Informasi | Nilai |
-|---|---|
-| Nama produk | Sistem Manajemen Operasional Pisciculture Farm Indonesia (PFI) |
-| Dokumen | Product Requirements Document (`prd.md`) |
-| Versi PRD | 1.0 |
-| Status | Draft terstruktur berdasarkan Master Blueprint & API Contract PFI V4.5 + perluasan MVP Kasir/POS |
-| Bahasa | Indonesia |
-| Zona waktu bisnis | `Asia/Jakarta` (UTC+7) |
-| Basis teknis yang telah ditetapkan | PostgreSQL 13+, autentikasi JWT, RBAC, ACID, idempotency UUIDv4 |
-| Sumber utama | `master_blueprint_api_contract_pfi_main.md` dan `architecture.md` |
+| Informasi                          | Nilai                                                                                            |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Nama produk                        | Sistem Manajemen Operasional Pisciculture Farm Indonesia (PFI)                                   |
+| Dokumen                            | Product Requirements Document (`prd.md`)                                                         |
+| Versi PRD                          | 1.0                                                                                              |
+| Status                             | Draft terstruktur berdasarkan Master Blueprint & API Contract PFI V4.5 + perluasan MVP Kasir/POS |
+| Bahasa                             | Indonesia                                                                                        |
+| Zona waktu bisnis                  | `Asia/Jakarta` (UTC+7)                                                                           |
+| Basis teknis yang telah ditetapkan | PostgreSQL 13+, autentikasi JWT, RBAC, ACID, idempotency UUIDv4                                  |
+| Sumber utama                       | `master_blueprint_api_contract_pfi_main.md` dan `architecture.md`                                |
 
 > **Kedudukan dokumen:** PRD ini menerjemahkan blueprint menjadi kebutuhan produk, halaman, perilaku pengguna, alur kerja, dan kondisi kegagalan. PRD tidak boleh digunakan untuk diam-diam mengubah keputusan bisnis atau kontrak teknis yang sudah dikunci pada Master Blueprint. Jika ditemukan konflik antara PRD dan blueprint, pekerjaan implementasi harus dihentikan pada bagian yang konflik dan meminta keputusan pemilik produk.
 
@@ -20,14 +21,14 @@
 
 Agar AI, desainer, developer, dan QA tidak menganggap semua rancangan memiliki tingkat kepastian yang sama, setiap kebutuhan dibaca dengan status berikut.
 
-| Status | Makna |
-|---|---|
-| **LOCKED — V4.5** | Keputusan penerimaan ikan dan VOID pada Master Blueprint V4.5 yang telah disetujui untuk Sprint 1. Tidak boleh diubah tanpa persetujuan pemilik produk. |
-| **LOCKED — BUSINESS** | Keputusan bisnis POS yang telah dikonfirmasi pengguna. Perilaku bisnisnya tidak boleh ditebak atau diubah. |
-| **APPROVED — OWNER** | Keputusan arsitektur atau teknis yang telah ditetapkan pemilik produk pada `architecture.md`. Siap dikunci ke kontrak teknis final. |
-| **PROPOSED — TECHNICAL** | Rancangan teknis POS yang masih berupa usulan. Nama tabel, endpoint, payload, dan detail implementasi belum otomatis menjadi kontrak final. |
-| **TBD — NEEDS DECISION** | Detail yang belum diputuskan. AI/developer wajib menandainya dan tidak boleh mengarang nilai atau perilaku. |
-| **OUT OF SCOPE** | Tidak dibangun pada ruang lingkup PRD/MVP ini. |
+| Status                   | Makna                                                                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **LOCKED — V4.5**        | Keputusan penerimaan ikan dan VOID pada Master Blueprint V4.5 yang telah disetujui untuk Sprint 1. Tidak boleh diubah tanpa persetujuan pemilik produk. |
+| **LOCKED — BUSINESS**    | Keputusan bisnis POS yang telah dikonfirmasi pengguna. Perilaku bisnisnya tidak boleh ditebak atau diubah.                                              |
+| **APPROVED — OWNER**     | Keputusan arsitektur atau teknis yang telah ditetapkan pemilik produk pada `architecture.md`. Siap dikunci ke kontrak teknis final.                     |
+| **PROPOSED — TECHNICAL** | Rancangan teknis POS yang masih berupa usulan. Nama tabel, endpoint, payload, dan detail implementasi belum otomatis menjadi kontrak final.             |
+| **TBD — NEEDS DECISION** | Detail yang belum diputuskan. AI/developer wajib menandainya dan tidak boleh mengarang nilai atau perilaku.                                             |
+| **OUT OF SCOPE**         | Tidak dibangun pada ruang lingkup PRD/MVP ini.                                                                                                          |
 
 ### 0.1 Sumber keputusan
 
@@ -73,16 +74,16 @@ Menyediakan satu sistem pencatatan operasional PFI yang memiliki jejak transaksi
 
 ## 1.4 Hasil yang diharapkan
 
-| Hasil | Indikator keberhasilan |
-|---|---|
-| Penerimaan tercatat konsisten | Setiap penerimaan valid menghasilkan tepat satu batch dan tepat satu record penerimaan. |
-| Data historis terlindungi | Penerimaan, VOID, penjualan, dan audit tidak dihapus atau ditimpa setelah commit. |
-| Stok akurat | Penjualan tidak membuat stok negatif; stok 0 menutup batch; VOID penjualan menghitung ulang stok. |
-| Penjualan terkendali | Penjualan hanya dari batch aktif dengan stok > 0 dan harga tersedia. |
-| Harga transaksi konsisten | Harga satuan dan total transaksi tersimpan sebagai snapshot. |
-| Pembayaran tervalidasi | Hanya pembayaran lunas melalui Tunai atau Transfer yang dapat disimpan. |
-| Operasional kasir tidak bergantung pada printer | Transaksi tetap berhasil tersimpan meskipun pencetakan gagal. |
-| Keamanan berbasis peran | Pengguna hanya dapat mengakses fungsi sesuai role dan aturan kepemilikan cetak ulang. |
+| Hasil                                           | Indikator keberhasilan                                                                            |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Penerimaan tercatat konsisten                   | Setiap penerimaan valid menghasilkan tepat satu batch dan tepat satu record penerimaan.           |
+| Data historis terlindungi                       | Penerimaan, VOID, penjualan, dan audit tidak dihapus atau ditimpa setelah commit.                 |
+| Stok akurat                                     | Penjualan tidak membuat stok negatif; stok 0 menutup batch; VOID penjualan menghitung ulang stok. |
+| Penjualan terkendali                            | Penjualan hanya dari batch aktif dengan stok > 0 dan harga tersedia.                              |
+| Harga transaksi konsisten                       | Harga satuan dan total transaksi tersimpan sebagai snapshot.                                      |
+| Pembayaran tervalidasi                          | Hanya pembayaran lunas melalui Tunai atau Transfer yang dapat disimpan.                           |
+| Operasional kasir tidak bergantung pada printer | Transaksi tetap berhasil tersimpan meskipun pencetakan gagal.                                     |
+| Keamanan berbasis peran                         | Pengguna hanya dapat mengakses fungsi sesuai role dan aturan kepemilikan cetak ulang.             |
 
 ---
 
@@ -102,6 +103,7 @@ Menyediakan satu sistem pencatatan operasional PFI yang memiliki jejak transaksi
 ## 2.2 Termasuk dalam MVP pada PRD ini
 
 ### A. Fondasi aplikasi
+
 - Login dan pemeriksaan status akun.
 - Otorisasi berdasarkan satu role per pengguna.
 - Penerapan zona waktu bisnis `Asia/Jakarta`.
@@ -110,6 +112,7 @@ Menyediakan satu sistem pencatatan operasional PFI yang memiliki jejak transaksi
 - Pengendalian idempotency untuk mutasi yang diwajibkan blueprint.
 
 ### B. Penerimaan ikan dan batch
+
 - Melihat data penerimaan dan batch.
 - Membuat penerimaan ikan.
 - Membuat satu batch baru secara otomatis untuk setiap penerimaan valid.
@@ -117,6 +120,7 @@ Menyediakan satu sistem pencatatan operasional PFI yang memiliki jejak transaksi
 - VOID penerimaan oleh role yang diizinkan, dengan alasan wajib, dan hanya jika tidak ada transaksi turunan.
 
 ### C. Ikan Keluar (Kasir/POS)
+
 - Melihat batch yang dapat dijual.
 - Melihat dan memuat ulang stok serta harga terbaru.
 - Mengelola daftar harga oleh Owner dan Admin Operasional.
@@ -161,28 +165,28 @@ Aplikasi digunakan oleh personel internal PFI. Akses ditentukan oleh role yang m
 
 ## 3.1 Daftar role
 
-| Role | Gambaran pengguna | Kebutuhan utama |
-|---|---|---|
-| **Owner** | Pemilik/pengelola usaha | Memantau data penerimaan, audit, dan seluruh transaksi POS; mengelola harga; melakukan transaksi POS dan VOID penjualan. |
-| **Admin Operasional** | Pengelola operasional dan administrasi | Mencatat penerimaan, mengelola harga, menangani VOID penerimaan, serta menjalankan dan mengawasi transaksi POS. |
-| **Kepala Budidaya** | Penanggung jawab kegiatan budidaya | Melihat penerimaan/batch, membuat pencatatan penerimaan, dan melihat audit log. Tidak mengakses POS. |
-| **Kasir** | Petugas transaksi penjualan | Mengakses POS, menjual ikan, melihat seluruh penjualan, melakukan VOID penjualan, dan mencetak ulang transaksi yang dibuat sendiri. Tidak mengelola harga. |
+| Role                  | Gambaran pengguna                      | Kebutuhan utama                                                                                                                                            |
+| --------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Owner**             | Pemilik/pengelola usaha                | Memantau data penerimaan, audit, dan seluruh transaksi POS; mengelola harga; melakukan transaksi POS dan VOID penjualan.                                   |
+| **Admin Operasional** | Pengelola operasional dan administrasi | Mencatat penerimaan, mengelola harga, menangani VOID penerimaan, serta menjalankan dan mengawasi transaksi POS.                                            |
+| **Kepala Budidaya**   | Penanggung jawab kegiatan budidaya     | Melihat penerimaan/batch, membuat pencatatan penerimaan, dan melihat audit log. Tidak mengakses POS.                                                       |
+| **Kasir**             | Petugas transaksi penjualan            | Mengakses POS, menjual ikan, melihat seluruh penjualan, melakukan VOID penjualan, dan mencetak ulang transaksi yang dibuat sendiri. Tidak mengelola harga. |
 
 ## 3.2 Matriks akses gabungan
 
-| Fitur | Owner | Admin Operasional | Kepala Budidaya | Kasir |
-|---|---:|---:|---:|---:|
-| Melihat data penerimaan dan batch | Ya | Ya | Ya | Tidak (`APPROVED — OWNER`) |
-| Melihat audit log | Ya *(Semua)* | Ya *(Semua)* | Ya *(Khusus Penerimaan/Batch)* | Tidak (`APPROVED — OWNER`, `TBD-07`) |
-| Membuat penerimaan ikan | Tidak | Ya | Ya | Tidak |
-| VOID penerimaan ikan | Tidak | Ya | Tidak | Tidak |
-| Mengakses halaman POS | Ya | Ya | Tidak | Ya |
-| Melihat seluruh transaksi penjualan | Ya | Ya | Tidak | Ya |
-| Membuat transaksi penjualan | Ya | Ya | Tidak | Ya |
-| VOID penjualan | Ya | Ya | Tidak | Ya |
-| Menambah/mengubah daftar harga | Ya | Ya | Tidak | Tidak |
-| Cetak ulang transaksi yang dibuat sendiri | Ya | Ya | Tidak | Ya |
-| Cetak ulang transaksi yang dibuat pengguna lain | Tidak | Tidak | Tidak | Tidak |
+| Fitur                                           |        Owner | Admin Operasional |                Kepala Budidaya |                                Kasir |
+| ----------------------------------------------- | -----------: | ----------------: | -----------------------------: | -----------------------------------: |
+| Melihat data penerimaan dan batch               |           Ya |                Ya |                             Ya |           Tidak (`APPROVED — OWNER`) |
+| Melihat audit log                               | Ya _(Semua)_ |      Ya _(Semua)_ | Ya _(Khusus Penerimaan/Batch)_ | Tidak (`APPROVED — OWNER`, `TBD-07`) |
+| Membuat penerimaan ikan                         |        Tidak |                Ya |                             Ya |                                Tidak |
+| VOID penerimaan ikan                            |        Tidak |                Ya |                          Tidak |                                Tidak |
+| Mengakses halaman POS                           |           Ya |                Ya |                          Tidak |                                   Ya |
+| Melihat seluruh transaksi penjualan             |           Ya |                Ya |                          Tidak |                                   Ya |
+| Membuat transaksi penjualan                     |           Ya |                Ya |                          Tidak |                                   Ya |
+| VOID penjualan                                  |           Ya |                Ya |                          Tidak |                                   Ya |
+| Menambah/mengubah daftar harga                  |           Ya |                Ya |                          Tidak |                                Tidak |
+| Cetak ulang transaksi yang dibuat sendiri       |           Ya |                Ya |                          Tidak |                                   Ya |
+| Cetak ulang transaksi yang dibuat pengguna lain |        Tidak |             Tidak |                          Tidak |                                Tidak |
 
 **Batasan interpretasi:** hak akses yang tidak disebutkan untuk suatu role tidak boleh dianggap otomatis diizinkan. Matriks ini harus diwujudkan konsisten pada frontend dan backend. Backend merupakan pengaman otorisasi utama.
 
@@ -251,19 +255,19 @@ Bagian ini mendefinisikan halaman minimum yang dibutuhkan agar requirement produ
 
 ## 5.1 Peta halaman
 
-| ID | Halaman | Pengguna | Tujuan |
-|---|---|---|---|
-| PG-01 | Login | Semua pengguna terdaftar | Mengautentikasi akun dan mengarahkan pengguna berdasarkan hak akses. |
-| PG-02 | Daftar Penerimaan/Batch | Owner, Admin Operasional, Kepala Budidaya | Melihat penerimaan dan batch beserta statusnya. |
-| PG-03 | Form Penerimaan Ikan | Admin Operasional, Kepala Budidaya | Membuat penerimaan dan batch baru. |
+| ID    | Halaman                 | Pengguna                                  | Tujuan                                                                           |
+| ----- | ----------------------- | ----------------------------------------- | -------------------------------------------------------------------------------- |
+| PG-01 | Login                   | Semua pengguna terdaftar                  | Mengautentikasi akun dan mengarahkan pengguna berdasarkan hak akses.             |
+| PG-02 | Daftar Penerimaan/Batch | Owner, Admin Operasional, Kepala Budidaya | Melihat penerimaan dan batch beserta statusnya.                                  |
+| PG-03 | Form Penerimaan Ikan    | Admin Operasional, Kepala Budidaya        | Membuat penerimaan dan batch baru.                                               |
 | PG-04 | Detail Batch/Penerimaan | Owner, Admin Operasional, Kepala Budidaya | Melihat detail penerimaan dan status batch; menampilkan aksi sesuai role/status. |
-| PG-05 | VOID Penerimaan | Admin Operasional | Membatalkan penerimaan yang memenuhi aturan V4.5. |
-| PG-06 | Audit Log | Owner, Admin Operasional, Kepala Budidaya | Melihat jejak tindakan yang dicatat sistem. |
-| PG-07 | POS / Kasir | Owner, Admin Operasional, Kasir | Memilih batch, jumlah, harga, dan pembayaran untuk penjualan. |
-| PG-08 | Daftar Harga | Owner, Admin Operasional | Melihat dan mengelola harga spesies + ukuran. |
-| PG-09 | Daftar Penjualan | Owner, Admin Operasional, Kasir | Melihat seluruh transaksi penjualan. |
-| PG-10 | Detail Penjualan | Owner, Admin Operasional, Kasir | Melihat detail transaksi dan menampilkan aksi VOID/cetak ulang sesuai aturan. |
-| PG-11 | Struk / Dialog Cetak | Pembuat transaksi yang berhak | Menjalankan cetak otomatis atau cetak ulang tanpa membuat transaksi baru. |
+| PG-05 | VOID Penerimaan         | Admin Operasional                         | Membatalkan penerimaan yang memenuhi aturan V4.5.                                |
+| PG-06 | Audit Log               | Owner, Admin Operasional, Kepala Budidaya | Melihat jejak tindakan yang dicatat sistem.                                      |
+| PG-07 | POS / Kasir             | Owner, Admin Operasional, Kasir           | Memilih batch, jumlah, harga, dan pembayaran untuk penjualan.                    |
+| PG-08 | Daftar Harga            | Owner, Admin Operasional                  | Melihat dan mengelola harga spesies + ukuran.                                    |
+| PG-09 | Daftar Penjualan        | Owner, Admin Operasional, Kasir           | Melihat seluruh transaksi penjualan.                                             |
+| PG-10 | Detail Penjualan        | Owner, Admin Operasional, Kasir           | Melihat detail transaksi dan menampilkan aksi VOID/cetak ulang sesuai aturan.    |
+| PG-11 | Struk / Dialog Cetak    | Pembuat transaksi yang berhak             | Menjalankan cetak otomatis atau cetak ulang tanpa membuat transaksi baru.        |
 
 Tidak ada kebutuhan dashboard analitik, laporan laba/rugi, laporan arus kas, modul pakan, atau modul kematian yang ditetapkan pada sumber blueprint ini.
 
@@ -274,15 +278,18 @@ Tidak ada kebutuhan dashboard analitik, laporan laba/rugi, laporan arus kas, mod
 ## 6.1 PG-01 — Login
 
 ### Tujuan
+
 Memastikan hanya akun terdaftar dan aktif yang dapat masuk ke aplikasi.
 
 ### Elemen minimum
+
 - Input email.
 - Input kata sandi.
 - Tombol masuk.
 - Informasi kesalahan autentikasi yang tidak membocorkan detail sensitif.
 
 ### Perilaku
+
 1. Pengguna mengisi kredensial.
 2. Sistem memvalidasi kredensial ke backend.
 3. Jika valid dan akun aktif, sistem menerbitkan/menggunakan sesi autentikasi berbasis JWT sesuai implementasi.
@@ -290,6 +297,7 @@ Memastikan hanya akun terdaftar dan aktif yang dapat masuk ke aplikasi.
 5. Jika akun tidak aktif, token tidak valid, atau kredensial salah, akses ditolak.
 
 ### Kondisi gagal
+
 - Field kosong/tidak valid: tampilkan validasi tanpa memanggil operasi bisnis.
 - Kredensial salah: tampilkan pesan login gagal.
 - Token hilang/kedaluwarsa/tidak sah: minta pengguna login kembali.
@@ -301,9 +309,11 @@ Memastikan hanya akun terdaftar dan aktif yang dapat masuk ke aplikasi.
 ## 6.2 PG-02 — Daftar Penerimaan/Batch
 
 ### Tujuan
+
 Memberi akses untuk melihat penerimaan dan batch sesuai matriks role.
 
 ### Informasi minimum yang perlu disajikan
+
 - Kode batch.
 - Spesies ikan.
 - Ukuran ikan.
@@ -316,6 +326,7 @@ Memberi akses untuk melihat penerimaan dan batch sesuai matriks role.
 - Waktu pencatatan dan pengguna pembuat jika data tersedia dari API.
 
 ### Perilaku
+
 - Owner, Admin Operasional, dan Kepala Budidaya dapat melihat data.
 - Pengguna dapat membuka detail batch.
 - Aksi buat penerimaan hanya muncul untuk Admin Operasional dan Kepala Budidaya.
@@ -323,6 +334,7 @@ Memberi akses untuk melihat penerimaan dan batch sesuai matriks role.
 - Nilai stok aktual tidak boleh disajikan sebagai angka manual yang dapat diedit. Integrasi tampilan stok harus menggunakan perhitungan transaksi valid setelah layanan stok tersedia.
 
 ### Kondisi gagal
+
 - Pengguna tidak punya akses: tampilkan penolakan akses.
 - Data gagal dimuat: tampilkan pesan gagal dan aksi muat ulang.
 - Tidak ada data: tampilkan empty state, bukan error.
@@ -331,9 +343,11 @@ Memberi akses untuk melihat penerimaan dan batch sesuai matriks role.
 ## 6.3 PG-03 — Form Penerimaan Ikan
 
 ### Tujuan
+
 Mencatat ikan masuk dan membentuk satu batch baru secara otomatis.
 
 ### Pengguna yang berwenang
+
 - Admin Operasional.
 - Kepala Budidaya.
 
@@ -341,17 +355,18 @@ Owner tidak berwenang membuat penerimaan pada V4.5.
 
 ### Field form
 
-| Field | Wajib | Aturan |
-|---|---:|---|
-| `species_id` | Ya | Harus merujuk spesies aktif pada `fish_species`. |
-| `entry_date` | Ya | Format `YYYY-MM-DD`; tidak boleh melewati tanggal hari ini `Asia/Jakarta`. |
-| `quantity` | Ya | Integer, minimal 1 dan maksimal 1.000.000 ekor. |
-| `purchase_capital` | Ya | Rupiah desimal, 0,00 sampai 9.999.999.999,00; tidak boleh otomatis diisi default. |
-| `shipping_capital` | Ya | Rupiah desimal, 0,00 sampai 9.999.999.999,00; tidak boleh otomatis diisi default. |
-| `weight_sample_per_500` | Tidak | Gram per 500 ekor; jika diisi 0,01 sampai 100.000,00 gram. |
-| `fish_size` | Ya | Harus dipilih dari daftar ukuran resmi. |
+| Field                   | Wajib | Aturan                                                                            |
+| ----------------------- | ----: | --------------------------------------------------------------------------------- |
+| `species_id`            |    Ya | Harus merujuk spesies aktif pada `fish_species`.                                  |
+| `entry_date`            |    Ya | Format `YYYY-MM-DD`; tidak boleh melewati tanggal hari ini `Asia/Jakarta`.        |
+| `quantity`              |    Ya | Integer, minimal 1 dan maksimal 1.000.000 ekor.                                   |
+| `purchase_capital`      |    Ya | Rupiah desimal, 0,00 sampai 9.999.999.999,00; tidak boleh otomatis diisi default. |
+| `shipping_capital`      |    Ya | Rupiah desimal, 0,00 sampai 9.999.999.999,00; tidak boleh otomatis diisi default. |
+| `weight_sample_per_500` | Tidak | Gram per 500 ekor; jika diisi 0,01 sampai 100.000,00 gram.                        |
+| `fish_size`             |    Ya | Harus dipilih dari daftar ukuran resmi.                                           |
 
 ### Daftar ukuran resmi
+
 - `2-4 cm`
 - `3-5 cm`
 - `4-6 cm`
@@ -363,6 +378,7 @@ Owner tidak berwenang membuat penerimaan pada V4.5.
 - `10-12 cm`
 
 ### Alur
+
 1. Pengguna membuka form.
 2. Sistem menampilkan pilihan spesies aktif dan daftar ukuran resmi.
 3. Pengguna memasukkan tanggal, jumlah, modal pembelian, modal pengiriman, serta sampel berat opsional.
@@ -375,6 +391,7 @@ Owner tidak berwenang membuat penerimaan pada V4.5.
 10. Sistem mengembalikan data sukses dan menampilkan kode batch yang terbentuk.
 
 ### Hasil sukses
+
 - Satu batch baru berstatus `active`.
 - Satu record `incoming_fish` terhubung ke batch tersebut.
 - Relasi satu batch : satu penerimaan terjamin.
@@ -382,6 +399,7 @@ Owner tidak berwenang membuat penerimaan pada V4.5.
 - Data transaksi tidak dapat diubah atau dihapus setelah commit.
 
 ### Kondisi gagal
+
 - Payload tidak valid: tampilkan field yang harus diperbaiki; tidak ada record tersimpan.
 - Role tidak berwenang: tolak dengan `403`.
 - Token tidak sah: tolak dengan `401`.
@@ -397,9 +415,11 @@ Owner tidak berwenang membuat penerimaan pada V4.5.
 ## 6.4 PG-04 — Detail Batch/Penerimaan
 
 ### Tujuan
+
 Menampilkan satu batch dan data penerimaan yang terkait.
 
 ### Informasi minimum
+
 - Kode batch.
 - Spesies.
 - Ukuran ikan.
@@ -412,6 +432,7 @@ Menampilkan satu batch dan data penerimaan yang terkait.
 - Pembuat dan waktu pencatatan sesuai data yang tersedia.
 
 ### Perilaku
+
 - Data penerimaan bersifat baca-saja setelah tersimpan.
 - Tidak tersedia tombol edit atau delete untuk penerimaan.
 - Tombol VOID hanya boleh tersedia untuk Admin Operasional dan hanya saat syarat VOID terpenuhi.
@@ -420,12 +441,15 @@ Menampilkan satu batch dan data penerimaan yang terkait.
 ## 6.5 PG-05 — VOID Penerimaan
 
 ### Tujuan
+
 Membatalkan satu transaksi penerimaan yang belum memiliki transaksi turunan.
 
 ### Pengguna yang berwenang
+
 Hanya Admin Operasional.
 
 ### Ketentuan wajib
+
 - Alasan VOID (`reason`) wajib diisi dan tidak boleh kosong.
 - Penerimaan yang sudah memiliki transaksi turunan (penjualan, kematian, atau penggunaan pakan saat modul terkait tersedia) tidak dapat di-VOID.
 - Status batch harus `active`.
@@ -435,6 +459,7 @@ Hanya Admin Operasional.
 - Tindakan harus masuk audit log.
 
 ### Alur
+
 1. Admin membuka detail batch.
 2. Admin memilih VOID.
 3. Sistem menampilkan konfirmasi dan field alasan.
@@ -445,6 +470,7 @@ Hanya Admin Operasional.
 8. Sistem menampilkan hasil.
 
 ### Kondisi gagal
+
 - Bukan Admin Operasional: `403 FORBIDDEN`.
 - Batch tidak ditemukan: `404 BATCH_NOT_FOUND`.
 - Batch tidak aktif: `409 BATCH_NOT_ACTIVE`.
@@ -456,14 +482,17 @@ Hanya Admin Operasional.
 ## 6.6 PG-06 — Audit Log
 
 ### Tujuan
+
 Memberikan visibilitas jejak tindakan untuk role yang ditetapkan V4.5.
 
 ### Pengguna yang berwenang
+
 - Owner.
 - Admin Operasional.
 - Kepala Budidaya.
 
 ### Perilaku
+
 - Audit log hanya dapat dibaca melalui UI; role `Kasir` ditolak (`403 FORBIDDEN`) mengakses halaman maupun API Audit Log (`APPROVED — OWNER`, `TBD-07`).
 - Role `Kepala Budidaya` hanya dapat melihat entri audit modul Penerimaan/Batch (`CREATE_ENTRY`, `VOID_ENTRY`) dan tidak melihat entri audit transaksi penjualan POS (`CREATE_SALE`, `VOID_SALE`, `UPDATE_PRICE`).
 - Audit log tidak dapat diedit atau dihapus.
@@ -475,9 +504,11 @@ Memberikan visibilitas jejak tindakan untuk role yang ditetapkan V4.5.
 ## 6.7 PG-07 — POS / Kasir
 
 ### Tujuan
+
 Membuat penjualan ikan dari batch aktif dengan stok tersedia.
 
 ### Pengguna yang berwenang
+
 - Owner.
 - Admin Operasional.
 - Kasir.
@@ -485,11 +516,14 @@ Membuat penjualan ikan dari batch aktif dengan stok tersedia.
 Kepala Budidaya tidak dapat mengakses POS.
 
 ### Daftar batch yang dapat dijual
+
 Sistem hanya menampilkan batch yang:
+
 - Berstatus `active`.
 - Memiliki stok valid lebih dari 0.
 
 Informasi pada pilihan batch:
+
 - Spesies.
 - Ukuran.
 - Kode batch untuk identifikasi di layar.
@@ -499,6 +533,7 @@ Informasi pada pilihan batch:
 Kode batch hanya untuk penggunaan internal UI dan tidak dicetak pada struk.
 
 ### Input transaksi
+
 - Satu batch.
 - Jumlah ikan dalam ekor.
 - Harga satuan terkini yang dikonfirmasi.
@@ -506,6 +541,7 @@ Kode batch hanya untuk penggunaan internal UI dan tidak dicetak pada struk.
 - Uang diterima untuk pembayaran Tunai.
 
 ### Ketentuan
+
 1. Satu transaksi hanya boleh berisi satu batch.
 2. Jumlah harus integer positif.
 3. Penjualan sebagian stok diperbolehkan.
@@ -519,18 +555,21 @@ Kode batch hanya untuk penggunaan internal UI dan tidak dicetak pada struk.
 11. Backend menghitung ulang dan memvalidasi semua nilai; tidak mempercayai total dari frontend.
 
 ### Pembayaran Tunai
+
 - Kasir memasukkan uang diterima.
 - Uang diterima harus sama dengan atau lebih besar dari total.
 - Sistem menghitung kembalian.
 - Pembayaran kurang ditolak.
 
 ### Pembayaran Transfer
+
 - Kasir memilih Transfer.
 - Kasir mengonfirmasi dana telah diterima.
 - Nomor referensi transfer tidak diwajibkan.
 - Transaksi tidak boleh disimpan sebagai lunas sebelum konfirmasi diterima.
 
 ### Alur penjualan
+
 1. Pengguna membuka POS.
 2. Sistem memuat daftar batch aktif dengan stok lebih dari 0.
 3. Pengguna memilih satu batch.
@@ -551,6 +590,7 @@ Kode batch hanya untuk penggunaan internal UI dan tidak dicetak pada struk.
 18. Jika cetak gagal, transaksi tetap sukses dan status cetak ditangani terpisah.
 
 ### Kondisi gagal
+
 - Role tidak berwenang: `403`.
 - Batch tidak ditemukan: `404`.
 - Batch tidak `active`: `409 BATCH_NOT_ACTIVE`.
@@ -571,19 +611,23 @@ Kode batch hanya untuk penggunaan internal UI dan tidak dicetak pada struk.
 ## 6.8 PG-08 — Daftar Harga
 
 ### Tujuan
+
 Memelihara satu harga aktif untuk setiap kombinasi spesies dan ukuran.
 
 ### Pengguna yang berwenang
+
 - Owner.
 - Admin Operasional.
 
 ### Informasi
+
 - Spesies.
 - Ukuran.
 - Harga per ekor dalam Rupiah bulat.
 - Waktu pembaruan dan aktor pembaruan jika ditampilkan dan didukung audit/metadata.
 
 ### Perilaku
+
 - Owner dan Admin Operasional dapat menambah harga untuk kombinasi yang belum ada.
 - Owner dan Admin Operasional dapat mengubah harga kombinasi yang sudah ada.
 - Kasir tidak dapat menambah atau mengubah harga.
@@ -593,6 +637,7 @@ Memelihara satu harga aktif untuk setiap kombinasi spesies dan ukuran.
 - Penjualan harus memakai harga terbaru yang telah dikonfirmasi.
 
 ### Validasi
+
 - Satu kombinasi `species_id + fish_size` hanya boleh memiliki satu harga aktif.
 - Harga bilangan bulat (integer) Rupiah tanpa pecahan.
 - Harga minimal Rp 1 dan maksimal Rp 10.000.000 per ekor (`APPROVED — OWNER`, `TBD-01`).
@@ -600,14 +645,17 @@ Memelihara satu harga aktif untuk setiap kombinasi spesies dan ukuran.
 ## 6.9 PG-09 — Daftar Penjualan
 
 ### Tujuan
+
 Menampilkan histori transaksi penjualan kepada seluruh role POS.
 
 ### Pengguna
+
 - Owner.
 - Admin Operasional.
 - Kasir.
 
 ### Informasi minimum
+
 - Nomor penjualan internal.
 - Waktu transaksi.
 - Batch terkait untuk informasi internal.
@@ -622,6 +670,7 @@ Menampilkan histori transaksi penjualan kepada seluruh role POS.
 Nomor penjualan adalah identitas internal dan tidak dicetak pada struk.
 
 ### Perilaku
+
 - Semua role POS dapat melihat seluruh transaksi penjualan.
 - Data penjualan tidak dapat diedit atau dihapus.
 - Pengguna dapat membuka detail penjualan.
@@ -631,9 +680,11 @@ Nomor penjualan adalah identitas internal dan tidak dicetak pada struk.
 ## 6.10 PG-10 — Detail Penjualan
 
 ### Tujuan
+
 Menampilkan detail transaksi dan menyediakan aksi sesuai aturan.
 
 ### Perilaku
+
 - Semua role POS dapat membuka detail transaksi.
 - Semua role POS dapat melakukan VOID pada transaksi yang belum di-VOID.
 - VOID membatalkan seluruh transaksi, bukan sebagian jumlah.
@@ -643,12 +694,15 @@ Menampilkan detail transaksi dan menyediakan aksi sesuai aturan.
 - Cetak ulang hanya tersedia bagi `created_by` transaksi tersebut dan hanya jika transaksi belum di-VOID.
 
 ### Konfirmasi VOID
+
 UI harus meminta konfirmasi sebelum tindakan VOID dijalankan. Konfirmasi ini adalah pengaman interaksi dan bukan field alasan. Jangan membuat field alasan wajib karena bertentangan dengan keputusan bisnis POS.
 
 ## 6.11 PG-11 — Struk dan pencetakan
 
 ### Konten struk wajib
+
 Struk hanya memuat:
+
 1. Nama perusahaan: Pisciculture Farm Indonesia.
 2. Tanggal dan waktu transaksi.
 3. Spesies ikan.
@@ -660,6 +714,7 @@ Struk hanya memuat:
 9. Nama kasir.
 
 Tidak boleh ditambahkan:
+
 - Nomor transaksi internal.
 - Kode batch.
 - Data pelanggan.
@@ -667,6 +722,7 @@ Tidak boleh ditambahkan:
 - Alasan VOID.
 
 ### Perilaku
+
 - Sistem mencoba mencetak otomatis setelah transaksi berhasil tersimpan.
 - Struk mendukung layout 58 mm dan 80 mm.
 - Sistem menyediakan fungsi cetak ulang.
@@ -677,6 +733,7 @@ Tidak boleh ditambahkan:
 - Target perangkat kasir: Android, iPhone, PC, laptop.
 
 ### Kondisi gagal
+
 - Printer tidak ditemukan/tidak terhubung: tampilkan notifikasi gagal cetak; transaksi tetap sukses.
 - Proses cetak gagal/timeout: status transaksi tetap sukses; sediakan retry cetak sesuai hak akses.
 - Pengguna bukan pembuat transaksi: tolak cetak ulang dengan `403`.
@@ -791,74 +848,74 @@ flowchart TD
 
 ID berikut digunakan untuk menghubungkan kebutuhan produk dengan desain, implementasi, dan test case.
 
-| ID | Requirement | Prioritas | Status sumber |
-|---|---|---|---|
-| FR-AUTH-01 | Sistem harus mengautentikasi pengguna menggunakan JWT terverifikasi. | Must | LOCKED — V4.5 |
-| FR-AUTH-02 | Sistem harus memeriksa akun aktif dan role pada setiap operasi terlindungi. | Must | LOCKED — V4.5 |
-| FR-AUTH-03 | Satu pengguna hanya memiliki satu role untuk MVP. | Must | LOCKED — V4.5 |
-| FR-REC-01 | Setiap penerimaan valid harus membuat satu batch baru. | Must | LOCKED — V4.5 |
-| FR-REC-02 | Setiap batch harus memiliki tepat satu record penerimaan. | Must | LOCKED — V4.5 |
-| FR-REC-03 | Satu batch hanya boleh berisi satu spesies dan satu ukuran. | Must | LOCKED — V4.5 |
-| FR-REC-04 | Form penerimaan harus menerapkan field wajib, opsional, enum, dan batas nilai V4.5. | Must | LOCKED — V4.5 |
-| FR-REC-05 | Pengguna berwenang harus dapat melihat penerimaan dan batch. | Must | LOCKED — V4.5 |
-| FR-REC-06 | Admin Operasional dan Kepala Budidaya dapat membuat penerimaan. | Must | LOCKED — V4.5 |
-| FR-REC-07 | Hanya Admin Operasional yang dapat VOID penerimaan. | Must | LOCKED — V4.5 |
-| FR-REC-08 | VOID penerimaan wajib memiliki alasan dan ditolak jika ada transaksi turunan. | Must | LOCKED — V4.5 |
-| FR-REC-09 | Data penerimaan dan record VOID tidak boleh diedit atau dihapus setelah commit. | Must | LOCKED — V4.5 |
-| FR-BATCH-01 | Kode batch harus mengikuti `PFI-BCH-YYYYMMDD-XXX` berbasis `entry_date`. | Must | LOCKED — V4.5 |
-| FR-BATCH-02 | Sequence batch per tanggal tidak boleh melebihi 999. | Must | LOCKED — V4.5 |
-| FR-BATCH-03 | Stok harus dihitung dari penerimaan valid dikurangi penjualan dan kematian valid. | Must | LOCKED — V4.5 |
-| FR-BATCH-04 | Batch harus berstatus `active`, `completed`, atau `voided` sesuai kondisi. | Must | LOCKED — V4.5 |
-| FR-POS-01 | POS hanya dapat diakses Owner, Admin Operasional, dan Kasir. | Must | LOCKED — BUSINESS |
-| FR-POS-02 | POS hanya menampilkan batch `active` dengan stok > 0. | Must | LOCKED — BUSINESS |
-| FR-POS-03 | Satu transaksi penjualan hanya boleh menggunakan satu batch. | Must | LOCKED — BUSINESS |
-| FR-POS-04 | Penjualan hanya menggunakan satuan ekor dan dapat dilakukan sebagian. | Must | LOCKED — BUSINESS |
-| FR-POS-05 | Jika jumlah > stok, sistem membatasi jumlah dan meminta konfirmasi. | Must | LOCKED — BUSINESS |
-| FR-PRICE-01 | Harga berdasarkan kombinasi spesies dan ukuran. | Must | LOCKED — BUSINESS |
-| FR-PRICE-02 | Owner dan Admin Operasional dapat menambah serta mengubah harga. | Must | LOCKED — BUSINESS |
-| FR-PRICE-03 | Kasir tidak dapat mengelola harga; harga tidak dapat dihapus melalui MVP. | Must | LOCKED — BUSINESS |
-| FR-PRICE-04 | Harga menggunakan Rupiah integer tanpa desimal. | Must | LOCKED — BUSINESS |
-| FR-PRICE-05 | Batch tanpa harga tidak dapat dijual. | Must | LOCKED — BUSINESS |
-| FR-PRICE-06 | Harga harus di-refresh dan dikonfirmasi sebelum transaksi disimpan. | Must | LOCKED — BUSINESS |
-| FR-PRICE-07 | Transaksi menyimpan snapshot harga dan total pada saat penjualan. | Must | LOCKED — BUSINESS |
-| FR-SALE-01 | Sistem harus menyimpan nomor penjualan `PFI-SAL-YYYYMMDD-XXX`. | Must | LOCKED — BUSINESS |
-| FR-SALE-02 | Sequence penjualan harian tidak boleh berhenti pada 999. | Must | LOCKED — BUSINESS |
-| FR-SALE-03 | Semua role POS dapat melihat seluruh transaksi penjualan. | Must | LOCKED — BUSINESS |
-| FR-SALE-04 | Transaksi penjualan bersifat append-only. | Must | LOCKED — BUSINESS |
-| FR-PAY-01 | Pembayaran harus lunas melalui Tunai atau Transfer. | Must | LOCKED — BUSINESS |
-| FR-PAY-02 | Untuk Tunai, uang diterima harus >= total dan kembalian dihitung sistem. | Must | LOCKED — BUSINESS |
-| FR-PAY-03 | Untuk Transfer, kasir harus mengonfirmasi dana diterima; nomor referensi tidak diwajibkan. | Must | LOCKED — BUSINESS |
-| FR-VOID-SALE-01 | Semua role POS dapat VOID satu transaksi secara utuh. | Must | LOCKED — BUSINESS |
-| FR-VOID-SALE-02 | VOID penjualan tidak membutuhkan alasan dan hanya boleh terjadi satu kali per transaksi. | Must | LOCKED — BUSINESS |
-| FR-VOID-SALE-03 | VOID penjualan harus mengembalikan stok dan menghitung ulang status batch. | Must | LOCKED — BUSINESS |
-| FR-PRINT-01 | Sistem harus mencoba mencetak otomatis setelah transaksi tersimpan. | Must | LOCKED — BUSINESS |
-| FR-PRINT-02 | Sistem harus mendukung cetak ulang hanya oleh pembuat transaksi. | Must | LOCKED — BUSINESS |
-| FR-PRINT-03 | Transaksi VOID tidak boleh dicetak ulang. | Must | LOCKED — BUSINESS |
-| FR-PRINT-04 | Kegagalan cetak tidak boleh membatalkan transaksi yang telah commit. | Must | LOCKED — BUSINESS |
-| FR-PRINT-05 | Struk mendukung lebar 58 mm dan 80 mm. | Must | LOCKED — BUSINESS |
-| FR-AUD-01 | Mutasi transaksi dan tindakan VOID harus menghasilkan audit sesuai kontrak. | Must | LOCKED — V4.5 / POS perluasan |
-| FR-IDEM-01 | Mutasi harus dilindungi Idempotency-Key UUIDv4 sesuai pola V4.5. | Must | LOCKED — V4.5 / POS perluasan |
-| FR-CONC-01 | Operasi stok harus mengunci batch dan memvalidasi ulang stok sebelum commit. | Must | LOCKED — V4.5 / POS perluasan |
+| ID              | Requirement                                                                                | Prioritas | Status sumber                 |
+| --------------- | ------------------------------------------------------------------------------------------ | --------- | ----------------------------- |
+| FR-AUTH-01      | Sistem harus mengautentikasi pengguna menggunakan JWT terverifikasi.                       | Must      | LOCKED — V4.5                 |
+| FR-AUTH-02      | Sistem harus memeriksa akun aktif dan role pada setiap operasi terlindungi.                | Must      | LOCKED — V4.5                 |
+| FR-AUTH-03      | Satu pengguna hanya memiliki satu role untuk MVP.                                          | Must      | LOCKED — V4.5                 |
+| FR-REC-01       | Setiap penerimaan valid harus membuat satu batch baru.                                     | Must      | LOCKED — V4.5                 |
+| FR-REC-02       | Setiap batch harus memiliki tepat satu record penerimaan.                                  | Must      | LOCKED — V4.5                 |
+| FR-REC-03       | Satu batch hanya boleh berisi satu spesies dan satu ukuran.                                | Must      | LOCKED — V4.5                 |
+| FR-REC-04       | Form penerimaan harus menerapkan field wajib, opsional, enum, dan batas nilai V4.5.        | Must      | LOCKED — V4.5                 |
+| FR-REC-05       | Pengguna berwenang harus dapat melihat penerimaan dan batch.                               | Must      | LOCKED — V4.5                 |
+| FR-REC-06       | Admin Operasional dan Kepala Budidaya dapat membuat penerimaan.                            | Must      | LOCKED — V4.5                 |
+| FR-REC-07       | Hanya Admin Operasional yang dapat VOID penerimaan.                                        | Must      | LOCKED — V4.5                 |
+| FR-REC-08       | VOID penerimaan wajib memiliki alasan dan ditolak jika ada transaksi turunan.              | Must      | LOCKED — V4.5                 |
+| FR-REC-09       | Data penerimaan dan record VOID tidak boleh diedit atau dihapus setelah commit.            | Must      | LOCKED — V4.5                 |
+| FR-BATCH-01     | Kode batch harus mengikuti `PFI-BCH-YYYYMMDD-XXX` berbasis `entry_date`.                   | Must      | LOCKED — V4.5                 |
+| FR-BATCH-02     | Sequence batch per tanggal tidak boleh melebihi 999.                                       | Must      | LOCKED — V4.5                 |
+| FR-BATCH-03     | Stok harus dihitung dari penerimaan valid dikurangi penjualan dan kematian valid.          | Must      | LOCKED — V4.5                 |
+| FR-BATCH-04     | Batch harus berstatus `active`, `completed`, atau `voided` sesuai kondisi.                 | Must      | LOCKED — V4.5                 |
+| FR-POS-01       | POS hanya dapat diakses Owner, Admin Operasional, dan Kasir.                               | Must      | LOCKED — BUSINESS             |
+| FR-POS-02       | POS hanya menampilkan batch `active` dengan stok > 0.                                      | Must      | LOCKED — BUSINESS             |
+| FR-POS-03       | Satu transaksi penjualan hanya boleh menggunakan satu batch.                               | Must      | LOCKED — BUSINESS             |
+| FR-POS-04       | Penjualan hanya menggunakan satuan ekor dan dapat dilakukan sebagian.                      | Must      | LOCKED — BUSINESS             |
+| FR-POS-05       | Jika jumlah > stok, sistem membatasi jumlah dan meminta konfirmasi.                        | Must      | LOCKED — BUSINESS             |
+| FR-PRICE-01     | Harga berdasarkan kombinasi spesies dan ukuran.                                            | Must      | LOCKED — BUSINESS             |
+| FR-PRICE-02     | Owner dan Admin Operasional dapat menambah serta mengubah harga.                           | Must      | LOCKED — BUSINESS             |
+| FR-PRICE-03     | Kasir tidak dapat mengelola harga; harga tidak dapat dihapus melalui MVP.                  | Must      | LOCKED — BUSINESS             |
+| FR-PRICE-04     | Harga menggunakan Rupiah integer tanpa desimal.                                            | Must      | LOCKED — BUSINESS             |
+| FR-PRICE-05     | Batch tanpa harga tidak dapat dijual.                                                      | Must      | LOCKED — BUSINESS             |
+| FR-PRICE-06     | Harga harus di-refresh dan dikonfirmasi sebelum transaksi disimpan.                        | Must      | LOCKED — BUSINESS             |
+| FR-PRICE-07     | Transaksi menyimpan snapshot harga dan total pada saat penjualan.                          | Must      | LOCKED — BUSINESS             |
+| FR-SALE-01      | Sistem harus menyimpan nomor penjualan `PFI-SAL-YYYYMMDD-XXX`.                             | Must      | LOCKED — BUSINESS             |
+| FR-SALE-02      | Sequence penjualan harian tidak boleh berhenti pada 999.                                   | Must      | LOCKED — BUSINESS             |
+| FR-SALE-03      | Semua role POS dapat melihat seluruh transaksi penjualan.                                  | Must      | LOCKED — BUSINESS             |
+| FR-SALE-04      | Transaksi penjualan bersifat append-only.                                                  | Must      | LOCKED — BUSINESS             |
+| FR-PAY-01       | Pembayaran harus lunas melalui Tunai atau Transfer.                                        | Must      | LOCKED — BUSINESS             |
+| FR-PAY-02       | Untuk Tunai, uang diterima harus >= total dan kembalian dihitung sistem.                   | Must      | LOCKED — BUSINESS             |
+| FR-PAY-03       | Untuk Transfer, kasir harus mengonfirmasi dana diterima; nomor referensi tidak diwajibkan. | Must      | LOCKED — BUSINESS             |
+| FR-VOID-SALE-01 | Semua role POS dapat VOID satu transaksi secara utuh.                                      | Must      | LOCKED — BUSINESS             |
+| FR-VOID-SALE-02 | VOID penjualan tidak membutuhkan alasan dan hanya boleh terjadi satu kali per transaksi.   | Must      | LOCKED — BUSINESS             |
+| FR-VOID-SALE-03 | VOID penjualan harus mengembalikan stok dan menghitung ulang status batch.                 | Must      | LOCKED — BUSINESS             |
+| FR-PRINT-01     | Sistem harus mencoba mencetak otomatis setelah transaksi tersimpan.                        | Must      | LOCKED — BUSINESS             |
+| FR-PRINT-02     | Sistem harus mendukung cetak ulang hanya oleh pembuat transaksi.                           | Must      | LOCKED — BUSINESS             |
+| FR-PRINT-03     | Transaksi VOID tidak boleh dicetak ulang.                                                  | Must      | LOCKED — BUSINESS             |
+| FR-PRINT-04     | Kegagalan cetak tidak boleh membatalkan transaksi yang telah commit.                       | Must      | LOCKED — BUSINESS             |
+| FR-PRINT-05     | Struk mendukung lebar 58 mm dan 80 mm.                                                     | Must      | LOCKED — BUSINESS             |
+| FR-AUD-01       | Mutasi transaksi dan tindakan VOID harus menghasilkan audit sesuai kontrak.                | Must      | LOCKED — V4.5 / POS perluasan |
+| FR-IDEM-01      | Mutasi harus dilindungi Idempotency-Key UUIDv4 sesuai pola V4.5.                           | Must      | LOCKED — V4.5 / POS perluasan |
+| FR-CONC-01      | Operasi stok harus mengunci batch dan memvalidasi ulang stok sebelum commit.               | Must      | LOCKED — V4.5 / POS perluasan |
 
 ---
 
 # 9. Persyaratan non-fungsional
 
-| ID | Kategori | Requirement |
-|---|---|---|
-| NFR-SEC-01 | Authentication | JWT harus diverifikasi; user identity tidak boleh dipercayakan pada payload frontend. |
-| NFR-SEC-02 | Authorization | RBAC harus diperiksa backend pada setiap endpoint dan operasi. |
-| NFR-SEC-03 | Least privilege | Hak database runtime dibatasi per tabel dan operasi. |
-| NFR-DATA-01 | Data integrity | Validasi tipe, format, rentang, enum, FK, UNIQUE, CHECK, dan trigger dilakukan pada lapisan terkait. |
-| NFR-DATA-02 | Immutability | Transaksi historis append-only; koreksi melalui reversal/VOID yang tercatat. |
-| NFR-TRANS-01 | ACID | Penulisan transaksi, sequence, idempotency, dan audit terkait dilakukan atomik. |
-| NFR-TRANS-02 | Idempotency | Retry jaringan dengan key dan payload sama tidak membuat transaksi duplikat. |
-| NFR-TRANS-03 | Concurrency | Lock batch harus mencegah overselling dan stok negatif. |
-| NFR-TIME-01 | Timezone | Semua tanggal bisnis mengikuti `Asia/Jakarta`. |
-| NFR-PERF-01 | Performance | Minimal 95% request penyimpanan penerimaan merespons maksimal 1,5 detik pada 50 concurrent requests, dengan staging minimal 2 vCPU, 4 GB RAM dan database minimal 100.000 records. |
-| NFR-PRINT-01 | Printing | Kegagalan printer harus terpisah dari keberhasilan transaksi database. |
-| NFR-UX-01 | Error feedback | Pesan kegagalan harus menjelaskan kondisi dan langkah yang dapat diambil tanpa mengubah status transaksi secara keliru. |
-| NFR-REG-01 | Regression | Penambahan POS tidak boleh merusak 32 test case V4.5 penerimaan dan VOID. |
+| ID           | Kategori        | Requirement                                                                                                                                                                        |
+| ------------ | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| NFR-SEC-01   | Authentication  | JWT harus diverifikasi; user identity tidak boleh dipercayakan pada payload frontend.                                                                                              |
+| NFR-SEC-02   | Authorization   | RBAC harus diperiksa backend pada setiap endpoint dan operasi.                                                                                                                     |
+| NFR-SEC-03   | Least privilege | Hak database runtime dibatasi per tabel dan operasi.                                                                                                                               |
+| NFR-DATA-01  | Data integrity  | Validasi tipe, format, rentang, enum, FK, UNIQUE, CHECK, dan trigger dilakukan pada lapisan terkait.                                                                               |
+| NFR-DATA-02  | Immutability    | Transaksi historis append-only; koreksi melalui reversal/VOID yang tercatat.                                                                                                       |
+| NFR-TRANS-01 | ACID            | Penulisan transaksi, sequence, idempotency, dan audit terkait dilakukan atomik.                                                                                                    |
+| NFR-TRANS-02 | Idempotency     | Retry jaringan dengan key dan payload sama tidak membuat transaksi duplikat.                                                                                                       |
+| NFR-TRANS-03 | Concurrency     | Lock batch harus mencegah overselling dan stok negatif.                                                                                                                            |
+| NFR-TIME-01  | Timezone        | Semua tanggal bisnis mengikuti `Asia/Jakarta`.                                                                                                                                     |
+| NFR-PERF-01  | Performance     | Minimal 95% request penyimpanan penerimaan merespons maksimal 1,5 detik pada 50 concurrent requests, dengan staging minimal 2 vCPU, 4 GB RAM dan database minimal 100.000 records. |
+| NFR-PRINT-01 | Printing        | Kegagalan printer harus terpisah dari keberhasilan transaksi database.                                                                                                             |
+| NFR-UX-01    | Error feedback  | Pesan kegagalan harus menjelaskan kondisi dan langkah yang dapat diambil tanpa mengubah status transaksi secara keliru.                                                            |
+| NFR-REG-01   | Regression      | Penambahan POS tidak boleh merusak 32 test case V4.5 penerimaan dan VOID.                                                                                                          |
 
 **Catatan SLA:** target NFR-PERF-01 pada blueprint secara eksplisit berlaku untuk penyimpanan penerimaan ikan. Target performa POS belum ditetapkan.
 
@@ -868,49 +925,49 @@ ID berikut digunakan untuk menghubungkan kebutuhan produk dengan desain, impleme
 
 ## 10.1 Error penerimaan dan batch
 
-| Kondisi | Hasil sistem |
-|---|---|
+| Kondisi                                                 | Hasil sistem                                     |
+| ------------------------------------------------------- | ------------------------------------------------ |
 | JSON tidak valid/field wajib hilang/nilai di luar batas | `400 INVALID_PAYLOAD`; tidak ada data tersimpan. |
-| `Idempotency-Key` hilang atau bukan UUIDv4 | `400 INVALID_IDEMPOTENCY_KEY`. |
-| JWT tidak ada, kedaluwarsa, atau tidak sah | `401 UNAUTHORIZED`. |
-| Role tidak berwenang | `403 FORBIDDEN`. |
-| Batch tidak ditemukan | `404 BATCH_NOT_FOUND`. |
-| Idempotency key sama, payload berbeda | `409 IDEMPOTENCY_MISMATCH`. |
-| Batch tidak aktif untuk VOID | `409 BATCH_NOT_ACTIVE`. |
-| Penerimaan memiliki transaksi turunan | `409 HAS_DEPENDENT_TRANSACTIONS`. |
-| Spesies tidak aktif | `422 SPECIES_NOT_ACTIVE`. |
-| Tanggal penerimaan di masa depan | `422 INVALID_ENTRY_DATE`. |
-| Sequence batch harian habis | `422 BATCH_SEQUENCE_EXHAUSTED`. |
-| Rate limit terlampaui | `429 RATE_LIMIT_EXCEEDED`. |
-| Kesalahan internal | `500 INTERNAL_SERVER_ERROR`. |
-| Database lock timeout | `503 DATABASE_LOCK_TIMEOUT`. |
-| Database tidak tersedia | `503 DATABASE_UNAVAILABLE`. |
+| `Idempotency-Key` hilang atau bukan UUIDv4              | `400 INVALID_IDEMPOTENCY_KEY`.                   |
+| JWT tidak ada, kedaluwarsa, atau tidak sah              | `401 UNAUTHORIZED`.                              |
+| Role tidak berwenang                                    | `403 FORBIDDEN`.                                 |
+| Batch tidak ditemukan                                   | `404 BATCH_NOT_FOUND`.                           |
+| Idempotency key sama, payload berbeda                   | `409 IDEMPOTENCY_MISMATCH`.                      |
+| Batch tidak aktif untuk VOID                            | `409 BATCH_NOT_ACTIVE`.                          |
+| Penerimaan memiliki transaksi turunan                   | `409 HAS_DEPENDENT_TRANSACTIONS`.                |
+| Spesies tidak aktif                                     | `422 SPECIES_NOT_ACTIVE`.                        |
+| Tanggal penerimaan di masa depan                        | `422 INVALID_ENTRY_DATE`.                        |
+| Sequence batch harian habis                             | `422 BATCH_SEQUENCE_EXHAUSTED`.                  |
+| Rate limit terlampaui                                   | `429 RATE_LIMIT_EXCEEDED`.                       |
+| Kesalahan internal                                      | `500 INTERNAL_SERVER_ERROR`.                     |
+| Database lock timeout                                   | `503 DATABASE_LOCK_TIMEOUT`.                     |
+| Database tidak tersedia                                 | `503 DATABASE_UNAVAILABLE`.                      |
 
 ## 10.2 Error POS dan respons produk
 
-| Kondisi | Respons yang diwajibkan |
-|---|---|
-| Pengguna tanpa role POS membuka POS | Tolak akses `403 FORBIDDEN`. |
-| Batch tidak ditemukan | Tolak transaksi; tampilkan bahwa batch tidak ditemukan. |
-| Batch bukan `active` | Tolak transaksi `409 BATCH_NOT_ACTIVE`. |
-| Stok 0 | Batch tidak ditawarkan sebagai pilihan penjualan. Jika stok berubah setelah dipilih, minta refresh dan jangan simpan. |
-| Jumlah <= 0 atau bukan integer | Tolak input. |
-| Jumlah melebihi stok | Batasi ke stok yang tersedia dan minta konfirmasi. |
-| Kasir menolak jumlah yang dibatasi | Batalkan proses; jangan simpan transaksi. |
-| Harga belum tersedia | Blokir penjualan; Owner/Admin Operasional harus menetapkan harga. |
-| Harga berubah setelah ditampilkan | Muat harga baru dan minta konfirmasi lagi. |
-| Harga stale/tidak sesuai harga yang berlaku | Tolak commit sampai harga di-refresh dan dikonfirmasi. |
-| Tunai kurang dari total | Tolak penyimpanan. |
-| Tunai lebih dari total | Terima pembayaran dan hitung kembalian. |
-| Transfer belum dikonfirmasi diterima | Jangan simpan sebagai transaksi lunas. |
-| Transaksi sudah di-VOID | Tolak VOID ulang. |
-| Nomor transaksi atau idempotency bentrok | Jangan membuat transaksi ganda; ikuti respons idempotency/conflict. |
-| Dua kasir menjual batch yang sama | Kunci batch, hitung stok terkini, dan tolak transaksi yang tidak lagi valid. |
-| Pengguna selain pembuat meminta cetak ulang | Tolak `403 FORBIDDEN`. |
-| Cetak ulang transaksi VOID | Tolak. |
-| Printer tidak tersedia | Tampilkan kegagalan cetak; transaksi tetap berhasil. |
-| Cetak gagal setelah penjualan commit | Jangan membuat transaksi baru; izinkan pembuat mencoba cetak ulang. |
-| Database/audit gagal sebelum commit | Rollback seluruh transaksi POS. |
+| Kondisi                                     | Respons yang diwajibkan                                                                                               |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Pengguna tanpa role POS membuka POS         | Tolak akses `403 FORBIDDEN`.                                                                                          |
+| Batch tidak ditemukan                       | Tolak transaksi; tampilkan bahwa batch tidak ditemukan.                                                               |
+| Batch bukan `active`                        | Tolak transaksi `409 BATCH_NOT_ACTIVE`.                                                                               |
+| Stok 0                                      | Batch tidak ditawarkan sebagai pilihan penjualan. Jika stok berubah setelah dipilih, minta refresh dan jangan simpan. |
+| Jumlah <= 0 atau bukan integer              | Tolak input.                                                                                                          |
+| Jumlah melebihi stok                        | Batasi ke stok yang tersedia dan minta konfirmasi.                                                                    |
+| Kasir menolak jumlah yang dibatasi          | Batalkan proses; jangan simpan transaksi.                                                                             |
+| Harga belum tersedia                        | Blokir penjualan; Owner/Admin Operasional harus menetapkan harga.                                                     |
+| Harga berubah setelah ditampilkan           | Muat harga baru dan minta konfirmasi lagi.                                                                            |
+| Harga stale/tidak sesuai harga yang berlaku | Tolak commit sampai harga di-refresh dan dikonfirmasi.                                                                |
+| Tunai kurang dari total                     | Tolak penyimpanan.                                                                                                    |
+| Tunai lebih dari total                      | Terima pembayaran dan hitung kembalian.                                                                               |
+| Transfer belum dikonfirmasi diterima        | Jangan simpan sebagai transaksi lunas.                                                                                |
+| Transaksi sudah di-VOID                     | Tolak VOID ulang.                                                                                                     |
+| Nomor transaksi atau idempotency bentrok    | Jangan membuat transaksi ganda; ikuti respons idempotency/conflict.                                                   |
+| Dua kasir menjual batch yang sama           | Kunci batch, hitung stok terkini, dan tolak transaksi yang tidak lagi valid.                                          |
+| Pengguna selain pembuat meminta cetak ulang | Tolak `403 FORBIDDEN`.                                                                                                |
+| Cetak ulang transaksi VOID                  | Tolak.                                                                                                                |
+| Printer tidak tersedia                      | Tampilkan kegagalan cetak; transaksi tetap berhasil.                                                                  |
+| Cetak gagal setelah penjualan commit        | Jangan membuat transaksi baru; izinkan pembuat mencoba cetak ulang.                                                   |
+| Database/audit gagal sebelum commit         | Rollback seluruh transaksi POS.                                                                                       |
 
 ## 10.3 Prinsip pesan error UI
 
@@ -929,29 +986,30 @@ PRD ini tidak menggantikan data dictionary pada Master Blueprint. Bagian ini han
 
 ## 11.1 Entitas V4.5
 
-| Entitas | Fungsi produk |
-|---|---|
-| `users` | Akun, identitas, role, dan status aktif pengguna. |
-| `fish_species` | Master spesies yang digunakan oleh penerimaan dan POS. |
-| `batch_daily_sequences` | Penomoran kode batch harian berdasarkan entry date. |
-| `batches` | Identitas batch, spesies, status, pembuat, dan waktu pembuatan. |
-| `incoming_fish` | Detail penerimaan ikan yang terhubung 1:1 ke batch. |
-| `incoming_fish_voids` | Reversal penerimaan dengan alasan wajib. |
-| `idempotency_keys` | Pencegahan transaksi ganda akibat retry. |
-| `audit_logs` | Rekam jejak tindakan pengguna dan transaksi. |
+| Entitas                 | Fungsi produk                                                   |
+| ----------------------- | --------------------------------------------------------------- |
+| `users`                 | Akun, identitas, role, dan status aktif pengguna.               |
+| `fish_species`          | Master spesies yang digunakan oleh penerimaan dan POS.          |
+| `batch_daily_sequences` | Penomoran kode batch harian berdasarkan entry date.             |
+| `batches`               | Identitas batch, spesies, status, pembuat, dan waktu pembuatan. |
+| `incoming_fish`         | Detail penerimaan ikan yang terhubung 1:1 ke batch.             |
+| `incoming_fish_voids`   | Reversal penerimaan dengan alasan wajib.                        |
+| `idempotency_keys`      | Pencegahan transaksi ganda akibat retry.                        |
+| `audit_logs`            | Rekam jejak tindakan pengguna dan transaksi.                    |
 
 ## 11.2 Entitas POS yang masih berupa rancangan konseptual
 
-| Entitas | Fungsi produk | Status |
-|---|---|---|
-| `fish_sale_prices` | Harga terbaru untuk kombinasi spesies dan ukuran. | PROPOSED — TECHNICAL |
-| `fish_sales` | Catatan penjualan satu batch, jumlah, snapshot harga, pembayaran, aktor, dan waktu. | PROPOSED — TECHNICAL |
-| `fish_sale_voids` | Catatan reversal penjualan. | PROPOSED — TECHNICAL |
-| `sale_daily_sequences` | Penomoran transaksi penjualan per hari tanpa batas 999. | PROPOSED — TECHNICAL |
+| Entitas                | Fungsi produk                                                                       | Status               |
+| ---------------------- | ----------------------------------------------------------------------------------- | -------------------- |
+| `fish_sale_prices`     | Harga terbaru untuk kombinasi spesies dan ukuran.                                   | PROPOSED — TECHNICAL |
+| `fish_sales`           | Catatan penjualan satu batch, jumlah, snapshot harga, pembayaran, aktor, dan waktu. | PROPOSED — TECHNICAL |
+| `fish_sale_voids`      | Catatan reversal penjualan.                                                         | PROPOSED — TECHNICAL |
+| `sale_daily_sequences` | Penomoran transaksi penjualan per hari tanpa batas 999.                             | PROPOSED — TECHNICAL |
 
 ### Aturan snapshot penjualan
 
 Setiap transaksi penjualan perlu menyimpan:
+
 - Batch yang dijual.
 - Jumlah ikan.
 - Harga per ekor saat transaksi dibuat.
@@ -978,18 +1036,18 @@ Keduanya mengikuti header autentikasi dan `Idempotency-Key` UUIDv4, beserta kont
 
 ## 12.2 Kandidat API POS
 
-| Operasi | Kandidat endpoint | Tujuan |
-|---|---|---|
-| Daftar batch siap jual | `GET /api/v1/pos/batches` | Daftar batch active dengan stok > 0, beserta harga jika ada. |
-| Detail batch POS | `GET /api/v1/pos/batches/{batch_id}` | Memuat ulang stok dan harga terbaru. |
-| Daftar harga | `GET /api/v1/pos/prices` | Melihat daftar harga sesuai hak akses. |
-| Tambah harga | `POST /api/v1/pos/prices` | Membuat harga untuk kombinasi yang belum tersedia. |
-| Ubah harga | `PATCH /api/v1/pos/prices/{price_id}` | Mengubah harga kombinasi yang telah ada. |
-| Buat penjualan | `POST /api/v1/fish-sales` | Membuat transaksi penjualan dengan validasi backend. |
-| Daftar penjualan | `GET /api/v1/fish-sales` | Melihat seluruh transaksi bagi role POS. |
-| Detail penjualan | `GET /api/v1/fish-sales/{sale_id}` | Melihat detail transaksi. |
-| VOID penjualan | `POST /api/v1/fish-sales/{sale_id}/void` | Membuat reversal penjualan. |
-| Cetak ulang | `GET /api/v1/fish-sales/{sale_id}/receipt` | Mengambil data struk untuk pembuat transaksi yang berhak. |
+| Operasi                | Kandidat endpoint                          | Tujuan                                                       |
+| ---------------------- | ------------------------------------------ | ------------------------------------------------------------ |
+| Daftar batch siap jual | `GET /api/v1/pos/batches`                  | Daftar batch active dengan stok > 0, beserta harga jika ada. |
+| Detail batch POS       | `GET /api/v1/pos/batches/{batch_id}`       | Memuat ulang stok dan harga terbaru.                         |
+| Daftar harga           | `GET /api/v1/pos/prices`                   | Melihat daftar harga sesuai hak akses.                       |
+| Tambah harga           | `POST /api/v1/pos/prices`                  | Membuat harga untuk kombinasi yang belum tersedia.           |
+| Ubah harga             | `PATCH /api/v1/pos/prices/{price_id}`      | Mengubah harga kombinasi yang telah ada.                     |
+| Buat penjualan         | `POST /api/v1/fish-sales`                  | Membuat transaksi penjualan dengan validasi backend.         |
+| Daftar penjualan       | `GET /api/v1/fish-sales`                   | Melihat seluruh transaksi bagi role POS.                     |
+| Detail penjualan       | `GET /api/v1/fish-sales/{sale_id}`         | Melihat detail transaksi.                                    |
+| VOID penjualan         | `POST /api/v1/fish-sales/{sale_id}/void`   | Membuat reversal penjualan.                                  |
+| Cetak ulang            | `GET /api/v1/fish-sales/{sale_id}/receipt` | Mengambil data struk untuk pembuat transaksi yang berhak.    |
 
 Developer tidak boleh menganggap daftar kandidat ini sebagai payload final. Request/response schema, validasi, error code, pagination, dan strategi refresh/konfirmasi harga harus disetujui dalam API Contract sebelum implementasi final.
 
@@ -1074,17 +1132,17 @@ Fitur POS dinyatakan diterima apabila:
 
 Bagian ini adalah daftar pertanyaan/keputusan yang memang belum dijawab dalam blueprint. AI dan tim pengembang tidak boleh menetapkan jawabannya secara sepihak.
 
-| ID | Topik | Status | Keputusan / Yang masih perlu diputuskan |
-|---|---|---|---|
-| TBD-01 | Batas harga jual | `APPROVED — OWNER` | Ditetapkan minimal Rp 1 dan maksimum Rp 10.000.000 per ekor (`BIGINT`, Rupiah bulat tanpa desimal). |
-| TBD-02 | Audit perubahan harga | `APPROVED — OWNER` | Dicatat di `audit_logs` (`action = 'UPDATE_PRICE'`) hanya dengan aktor dan waktu (`old_values = NULL`, `new_values = NULL`). |
-| TBD-03 | Printer aktual | `TBD — NEEDS DECISION` | Pendekatan ESC/POS Bluetooth (mobile) & Web USB/Browser Print (PC/laptop) disetujui, namun merek/model, bridge iOS/iPhone, SDK, dan uji fisik lintas perangkat wajib dikunci sebelum implementasi final. |
-| TBD-04 | Kontrak API POS | `TBD — NEEDS DECISION` | Request/response final, error code (termasuk rollback konkurensi/harga berubah), pagination, validasi, dan refresh/confirm price. |
-| TBD-05 | Sequence penjualan | `APPROVED — OWNER` | Menggunakan tabel `sale_daily_sequences` (`sale_date DATE PRIMARY KEY`, `last_number BIGINT`) tanpa batas 999. |
-| TBD-06 | Audit POS dan privilege | `APPROVED — OWNER` *(Actions)* / `TBD` *(DDL/Privileges)* | Nilai `action` (`CREATE_SALE`, `VOID_SALE`, `UPDATE_PRICE`) telah disetujui; trigger, `ALTER CONSTRAINT`, index, dan privilege runtime final dikunci pada `GPOS-02`. |
-| TBD-07 | Hak halaman audit untuk Kasir | `APPROVED — OWNER` | Role `Kasir` dilarang (`Forbidden`) mengakses data maupun halaman Audit Log. |
-| TBD-08 | Pengelolaan akun | `PARTIALLY RESOLVED — OWNER` (ADR 0001) | Akun awal `Owner` lokal dibuat lewat CLI idempoten dengan kredensial dari `.env`; akun yang sudah ada tidak diubah. Registrasi publik, deaktivasi, perubahan role, reset kata sandi, dan administrasi pengguna tetap TBD. |
-| TBD-09 | Pagination & filter daftar | `APPROVED — OWNER` (ADR 0001) | `page=1`, `limit=20`, maksimum `100`; rentang `startDate`/`endDate` ISO 8601 diterapkan inklusif pada timestamp transaksi utama; `status` hanya memakai enum resmi; default terbaru dahulu (`DESC`) dengan `id DESC` sebagai tie-breaker stabil. Pencarian dan pilihan sort tambahan belum disetujui. |
+| ID     | Topik                         | Status                                                    | Keputusan / Yang masih perlu diputuskan                                                                                                                                                                                                                                                               |
+| ------ | ----------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TBD-01 | Batas harga jual              | `APPROVED — OWNER`                                        | Ditetapkan minimal Rp 1 dan maksimum Rp 10.000.000 per ekor (`BIGINT`, Rupiah bulat tanpa desimal).                                                                                                                                                                                                   |
+| TBD-02 | Audit perubahan harga         | `APPROVED — OWNER`                                        | Dicatat di `audit_logs` (`action = 'UPDATE_PRICE'`) hanya dengan aktor dan waktu (`old_values = NULL`, `new_values = NULL`).                                                                                                                                                                          |
+| TBD-03 | Printer aktual                | `TBD — NEEDS DECISION`                                    | Pendekatan ESC/POS Bluetooth (mobile) & Web USB/Browser Print (PC/laptop) disetujui, namun merek/model, bridge iOS/iPhone, SDK, dan uji fisik lintas perangkat wajib dikunci sebelum implementasi final.                                                                                              |
+| TBD-04 | Kontrak API POS               | `TBD — NEEDS DECISION`                                    | Request/response final, error code (termasuk rollback konkurensi/harga berubah), pagination, validasi, dan refresh/confirm price.                                                                                                                                                                     |
+| TBD-05 | Sequence penjualan            | `APPROVED — OWNER`                                        | Menggunakan tabel `sale_daily_sequences` (`sale_date DATE PRIMARY KEY`, `last_number BIGINT`) tanpa batas 999.                                                                                                                                                                                        |
+| TBD-06 | Audit POS dan privilege       | `APPROVED — OWNER` _(Actions)_ / `TBD` _(DDL/Privileges)_ | Nilai `action` (`CREATE_SALE`, `VOID_SALE`, `UPDATE_PRICE`) telah disetujui; trigger, `ALTER CONSTRAINT`, index, dan privilege runtime final dikunci pada `GPOS-02`.                                                                                                                                  |
+| TBD-07 | Hak halaman audit untuk Kasir | `APPROVED — OWNER`                                        | Role `Kasir` dilarang (`Forbidden`) mengakses data maupun halaman Audit Log.                                                                                                                                                                                                                          |
+| TBD-08 | Pengelolaan akun              | `PARTIALLY RESOLVED — OWNER` (ADR 0001)                   | Akun awal `Owner` lokal dibuat lewat CLI idempoten dengan kredensial dari `.env`; akun yang sudah ada tidak diubah. Registrasi publik, deaktivasi, perubahan role, reset kata sandi, dan administrasi pengguna tetap TBD.                                                                             |
+| TBD-09 | Pagination & filter daftar    | `APPROVED — OWNER` (ADR 0001)                             | `page=1`, `limit=20`, maksimum `100`; rentang `startDate`/`endDate` ISO 8601 diterapkan inklusif pada timestamp transaksi utama; `status` hanya memakai enum resmi; default terbaru dahulu (`DESC`) dengan `id DESC` sebagai tie-breaker stabil. Pencarian dan pilihan sort tambahan belum disetujui. |
 
 Jangan menyelesaikan TBD dengan tebakan. Catat pertanyaan dalam daftar keputusan produk, ajukan kepada pemilik produk, lalu perbarui PRD dan blueprint setelah mendapat persetujuan.
 
@@ -1092,17 +1150,17 @@ Jangan menyelesaikan TBD dengan tebakan. Catat pertanyaan dalam daftar keputusan
 
 # 15. Risiko produk dan mitigasi yang diwajibkan
 
-| Risiko | Dampak | Mitigasi kebutuhan |
-|---|---|---|
-| Dua kasir menjual batch yang sama | Stok negatif atau overselling | Lock batch, hitung stok dalam transaksi, validasi ulang sebelum commit. |
-| Harga berubah ketika kasir sedang memproses penjualan | Harga yang disimpan tidak sesuai harga terbaru | Refresh harga dan konfirmasi ulang sebelum commit. |
-| Request diulang karena jaringan buruk | Transaksi ganda | Idempotency UUIDv4 dan respons cached. |
-| Printer gagal setelah pembayaran | Pengguna mengira penjualan gagal lalu membuat transaksi kedua | Simpan transaksi lebih dahulu, cetak setelah commit, tampilkan status cetak secara terpisah. |
-| Transaksi VOID mengubah histori asli | Audit dan stok tidak dapat ditelusuri | Reversal/VOID pada tabel terpisah, append-only. |
-| Role hanya diperiksa di UI | Pengguna dapat memanggil API tanpa hak | Validasi RBAC pada backend dan pembatasan privilege database. |
-| Kegagalan audit | Transaksi tidak memiliki jejak tindakan | Audit satu transaksi ACID dengan transaksi bisnis. |
-| Nilai stok diubah manual | Data stok tidak dapat dipercaya | Computed stock berdasarkan transaksi valid, bukan input edit manual. |
-| Printer tidak kompatibel dengan perangkat | Struk tidak dapat dicetak | Uji perangkat/printer aktual sebelum menentukan teknologi integrasi. |
+| Risiko                                                | Dampak                                                        | Mitigasi kebutuhan                                                                           |
+| ----------------------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Dua kasir menjual batch yang sama                     | Stok negatif atau overselling                                 | Lock batch, hitung stok dalam transaksi, validasi ulang sebelum commit.                      |
+| Harga berubah ketika kasir sedang memproses penjualan | Harga yang disimpan tidak sesuai harga terbaru                | Refresh harga dan konfirmasi ulang sebelum commit.                                           |
+| Request diulang karena jaringan buruk                 | Transaksi ganda                                               | Idempotency UUIDv4 dan respons cached.                                                       |
+| Printer gagal setelah pembayaran                      | Pengguna mengira penjualan gagal lalu membuat transaksi kedua | Simpan transaksi lebih dahulu, cetak setelah commit, tampilkan status cetak secara terpisah. |
+| Transaksi VOID mengubah histori asli                  | Audit dan stok tidak dapat ditelusuri                         | Reversal/VOID pada tabel terpisah, append-only.                                              |
+| Role hanya diperiksa di UI                            | Pengguna dapat memanggil API tanpa hak                        | Validasi RBAC pada backend dan pembatasan privilege database.                                |
+| Kegagalan audit                                       | Transaksi tidak memiliki jejak tindakan                       | Audit satu transaksi ACID dengan transaksi bisnis.                                           |
+| Nilai stok diubah manual                              | Data stok tidak dapat dipercaya                               | Computed stock berdasarkan transaksi valid, bukan input edit manual.                         |
+| Printer tidak kompatibel dengan perangkat             | Struk tidak dapat dicetak                                     | Uji perangkat/printer aktual sebelum menentukan teknologi integrasi.                         |
 
 ---
 
@@ -1142,6 +1200,7 @@ Setiap usulan perubahan harus memuat:
 ## 16.3 Larangan asumsi untuk AI
 
 AI tidak boleh:
+
 - Mengarang halaman dashboard atau laporan yang tidak diminta.
 - Mengarang role atau memberikan hak akses tambahan.
 - Menganggap semua pengguna dapat VOID semua jenis transaksi.
@@ -1183,6 +1242,7 @@ Modul POS belum boleh dianggap siap implementasi final sampai:
 ## 17.3 Definition of Ready untuk satu fitur
 
 Satu fitur baru boleh mulai dikerjakan jika:
+
 - [ ] Requirement ID tersedia.
 - [ ] Status dan ruang lingkupnya jelas.
 - [ ] Role yang boleh menggunakan fitur sudah ditentukan.
@@ -1198,28 +1258,28 @@ Satu fitur baru boleh mulai dikerjakan jika:
 
 # 18. Glosarium
 
-| Istilah | Definisi dalam proyek |
-|---|---|
-| PFI | Pisciculture Farm Indonesia. |
-| Batch | Satu kelompok ikan yang berasal dari tepat satu transaksi penerimaan; hanya satu spesies dan satu ukuran. |
-| Penerimaan | Transaksi pencatatan ikan masuk yang membuat satu batch. |
-| `entry_date` | Tanggal penerimaan ikan aktual, bukan tanggal input. |
-| Computed stock | Stok yang dihitung dari transaksi valid, bukan nilai manual. |
-| VOID | Pembatalan melalui record reversal terpisah, bukan penghapusan transaksi asli. |
-| POS | Modul Ikan Keluar/Kasir untuk penjualan ikan. |
-| Snapshot harga | Harga dan total yang disimpan pada saat transaksi, sehingga tidak berubah saat katalog diperbarui. |
-| Idempotency | Mekanisme agar retry request yang sama tidak membuat transaksi ganda. |
-| RBAC | Role-Based Access Control, pembatasan akses berdasarkan role. |
-| ACID | Atomicity, Consistency, Isolation, Durability pada transaksi database. |
-| `created_by` | Identitas pembuat transaksi yang berasal dari JWT. |
-| `Asia/Jakarta` | Zona waktu bisnis PFI yang digunakan dalam aturan tanggal dan penomoran. |
+| Istilah        | Definisi dalam proyek                                                                                     |
+| -------------- | --------------------------------------------------------------------------------------------------------- |
+| PFI            | Pisciculture Farm Indonesia.                                                                              |
+| Batch          | Satu kelompok ikan yang berasal dari tepat satu transaksi penerimaan; hanya satu spesies dan satu ukuran. |
+| Penerimaan     | Transaksi pencatatan ikan masuk yang membuat satu batch.                                                  |
+| `entry_date`   | Tanggal penerimaan ikan aktual, bukan tanggal input.                                                      |
+| Computed stock | Stok yang dihitung dari transaksi valid, bukan nilai manual.                                              |
+| VOID           | Pembatalan melalui record reversal terpisah, bukan penghapusan transaksi asli.                            |
+| POS            | Modul Ikan Keluar/Kasir untuk penjualan ikan.                                                             |
+| Snapshot harga | Harga dan total yang disimpan pada saat transaksi, sehingga tidak berubah saat katalog diperbarui.        |
+| Idempotency    | Mekanisme agar retry request yang sama tidak membuat transaksi ganda.                                     |
+| RBAC           | Role-Based Access Control, pembatasan akses berdasarkan role.                                             |
+| ACID           | Atomicity, Consistency, Isolation, Durability pada transaksi database.                                    |
+| `created_by`   | Identitas pembuat transaksi yang berasal dari JWT.                                                        |
+| `Asia/Jakarta` | Zona waktu bisnis PFI yang digunakan dalam aturan tanggal dan penomoran.                                  |
 
 ---
 
 # 19. Riwayat dokumen
 
-| Versi | Perubahan |
-|---|---|
-| 1.0 | Penyusunan PRD berdasarkan Master Blueprint V4.5 dan perluasan MVP Ikan Keluar (Kasir/POS) yang diberikan pengguna. Memisahkan kebutuhan terkunci, rancangan teknis POS, dan keputusan TBD. |
+| Versi | Perubahan                                                                                                                                                                                   |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0   | Penyusunan PRD berdasarkan Master Blueprint V4.5 dan perluasan MVP Ikan Keluar (Kasir/POS) yang diberikan pengguna. Memisahkan kebutuhan terkunci, rancangan teknis POS, dan keputusan TBD. |
 
 **Akhir dokumen.**

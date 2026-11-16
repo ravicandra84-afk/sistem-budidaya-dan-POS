@@ -10,8 +10,12 @@ describe("approved list query contract", () => {
   });
 
   it("accepts only official batch statuses", () => {
-    expect(batchListQuerySchema.safeParse({ status: "active" }).success).toBe(true);
-    expect(batchListQuerySchema.safeParse({ status: "void" }).success).toBe(false);
+    expect(batchListQuerySchema.safeParse({ status: "active" }).success).toBe(
+      true,
+    );
+    expect(batchListQuerySchema.safeParse({ status: "void" }).success).toBe(
+      false,
+    );
   });
 
   it("rejects an inverted date range", () => {

@@ -5,15 +5,23 @@ import { z } from "zod";
 dotenv.config({ path: resolve(__dirname, "../../../../.env"), quiet: true });
 
 const apiEnvironmentSchema = z.object({
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  NODE_ENV: z
+    .enum(["development", "test", "production"])
+    .default("development"),
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
-  API_PREFIX: z.string().regex(/^\/[a-z0-9/]+$/).default("/api/v1"),
+  API_PREFIX: z
+    .string()
+    .regex(/^\/[a-z0-9/]+$/)
+    .default("/api/v1"),
   TZ: z.literal("Asia/Jakarta"),
   DATABASE_URL: z
     .string()
     .url()
     .refine((value) => value.startsWith("postgresql://"))
-    .refine((value) => decodeURIComponent(new URL(value).username) === "pfi_app_runtime"),
+    .refine(
+      (value) =>
+        decodeURIComponent(new URL(value).username) === "pfi_app_runtime",
+    ),
   JWT_SECRET: z
     .string()
     .min(32)
@@ -26,12 +34,18 @@ const apiEnvironmentSchema = z.object({
 
 export type ApiEnvironment = z.infer<typeof apiEnvironmentSchema>;
 
-export function loadApiEnvironment(environment: NodeJS.ProcessEnv = process.env): ApiEnvironment {
+export function loadApiEnvironment(
+  environment: NodeJS.ProcessEnv = process.env,
+): ApiEnvironment {
   const parsed = apiEnvironmentSchema.safeParse(environment);
 
   if (!parsed.success) {
-    const invalidKeys = [...new Set(parsed.error.issues.map((issue) => issue.path.join(".")))];
-    throw new Error(`Invalid API environment configuration: ${invalidKeys.join(", ")}`);
+    const invalidKeys = [
+      ...new Set(parsed.error.issues.map((issue) => issue.path.join("."))),
+    ];
+    throw new Error(
+      `Invalid API environment configuration: ${invalidKeys.join(", ")}`,
+    );
   }
 
   return parsed.data;

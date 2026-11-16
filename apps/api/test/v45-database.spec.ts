@@ -2,11 +2,14 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { getLocalMigrationUrl } from "../prisma/runtime-env";
 
-const databaseSuite = process.env.RUN_V45_DB_TESTS === "1" ? describe : describe.skip;
+const databaseSuite =
+  process.env.RUN_V45_DB_TESTS === "1" ? describe : describe.skip;
 const rollbackFixtureMessage = "Rollback V4.5 test fixtures";
 
 databaseSuite("V4.5 PostgreSQL guards", () => {
-  const prisma = new PrismaClient({ datasources: { db: { url: getLocalMigrationUrl() } } });
+  const prisma = new PrismaClient({
+    datasources: { db: { url: getLocalMigrationUrl() } },
+  });
 
   afterAll(async () => {
     await prisma.$disconnect();
@@ -193,7 +196,10 @@ databaseSuite("V4.5 PostgreSQL guards", () => {
             createdBy: user.id,
           },
         });
-        await transaction.batch.update({ where: { id: batch.id }, data: { status: "voided" } });
+        await transaction.batch.update({
+          where: { id: batch.id },
+          data: { status: "voided" },
+        });
 
         await transaction.$executeRaw`SAVEPOINT status_transition_probe`;
         await expect(
