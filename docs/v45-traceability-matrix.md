@@ -5,7 +5,7 @@
 | Task                | P1-01 - Pemetaan domain dan requirement ke modul                                                              |
 | Scope               | Seluruh requirement Receiving, Batch, Receiving VOID, authentication, audit, dan database guards V4.5; POS dikecualikan |
 | Sources reviewed    | `prd.md`, `master_blueprint_api_contract_pfi_main.md`, `architecture.md`, repository implementation and tests |
-| Verification status | Full PostgreSQL contract suite executed 2026-11-17; TC-01 through TC-32 PASS; backup/restore rehearsal remains blocked by missing PostgreSQL client tools |
+| Verification status | Full PostgreSQL suite rerun 2026-11-17: 10 suites/121 tests PASS; `pfi_db` has 3/3 migrations up to date; local backup/restore rehearsal PASS (8 tables, 6 triggers, 6 species); Gate V4.5 APPROVED / PASS |
 
 ## Reading the Matrix
 
@@ -95,7 +95,7 @@ All numbered cases are declared in [v45-contract.e2e.spec.ts](../apps/api/test/v
 2. The Owner-approved update dated 2026-11-17 is reflected in Master Blueprint §2.3, the Receiving controller, RolesGuard integration tests, and batch detail UI: Owner, Admin Operasional, and Kepala Budidaya may create; Owner and Admin Operasional may VOID. Older role text remains in PRD `FR-REC-06/07` and Blueprint §§4.4, 4.5, and 5.2; these conflicts are noted, not silently rewritten.
 3. TC-20 and TC-28 PASS using the injected dependency port and a test writer that locks the same batch row. The production V4.5 provider intentionally returns no dependency while no approved dependent transaction source exists; no POS, mortality, or feed table/API was added.
 4. `current_stock` is derived from receipt quantity less Receiving VOID. SQL guard and TC-22 reject `completed` while computed stock is positive. Valid sales and mortality movement sources remain outside V4.5 until their approved modules exist.
-5. Full PostgreSQL suite passed 121/121. Backup/restore rehearsal remains unverified because `pg_dump`, `pg_restore`, `createdb`, and `dropdb` are not installed on the audit host; see the QA gate report.
+5. Full PostgreSQL suite rerun passed 121/121; `typecheck`, `lint`, and `build` passed; `pfi_test` has zero rows in all eight V4.5 tables after teardown. Read-only `prisma migrate status` reports all 3 migrations up to date on `pfi_db`; read-only catalog checks report 6 enabled triggers there. Operator-provided Pop!_OS host evidence records successful `pg_dump`/`pg_restore` rehearsal into `pfi_restore_check`, verified as 8 tables, 6 triggers, and 6 species, followed by database drop and dump cleanup. The implementation plan specifies staging; managed-staging verification was not performed, and the local rehearsal is accepted for this sign-off under the explicit instruction recorded in the QA report.
 
 ## Source References
 

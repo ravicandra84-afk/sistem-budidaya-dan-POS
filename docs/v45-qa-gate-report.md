@@ -6,13 +6,15 @@
 | Tanggal eksekusi | 2026-11-17 |
 | Database test | `pfi_test`, PostgreSQL 16, lokal |
 | Perintah P6-03 (run terbaru) | `RUN_V45_DB_TESTS=1 npm run test --workspace @pfi/api -- --runInBand` |
-| Hasil Jest (run terbaru) | 10 suite lulus; 121 test lulus; 0 diskip; 0 gagal |
+| Hasil Jest (run terbaru) | 10 suite lulus; 121 test lulus; 0 diskip; 0 gagal; 21.915 s |
 | Hasil TC resmi (run terbaru) | 32 PASS; 0 PARTIAL; 0 BLOCKED; 0 FAIL |
 | Status P6-03 | PASS — seluruh 32 TC lulus pada PostgreSQL test |
 | Benchmark P6-04 terbaru | 50 request; 0 error; p50 625.26 ms; p95 931.10 ms; p99 973.60 ms |
-| Checks P6-04 terbaru | Audit 0 vulnerabilities; typecheck, lint, build lulus; migrate test database dan seed lulus |
-| Status P6-04 | PARTIAL — benchmark lokal lulus; backup/restore rehearsal belum dapat dijalankan |
-| Status resmi Gate V4.5 | BLOCKED — backup/restore rehearsal wajib belum terverifikasi |
+| Checks terbaru | `typecheck`, `lint`, dan `build` lulus; test teardown mengosongkan seluruh tabel `pfi_test` |
+| Migrasi `pfi_db` | 3 migrasi ditemukan; seluruhnya up to date, termasuk `20261117000000_v45_computed_stock_guard` |
+| Backup/restore rehearsal | Lulus menurut bukti terminal operator: restore ke `pfi_restore_check` menghasilkan 8 tabel, 6 trigger, 6 spesies; database dan dump dibersihkan |
+| Status P6-04 | PARTIAL — static checks lulus; benchmark tersedia pada host lokal, bukan staging terkelola |
+| Status resmi Gate V4.5 | APPROVED / PASS — bukti backup/restore lokal diterima untuk sign-off berdasarkan instruksi eksplisit pada sesi ini |
 
 Semua TC-01 sampai TC-32 dijalankan pada [suite kontrak V4.5](../apps/api/test/v45-contract.e2e.spec.ts). Run final menghasilkan 10 suite lulus dan 121 test lulus tanpa skip atau failure. TC-20/28 memakai dependency guard yang diinjeksi dalam integration test, tanpa tabel atau endpoint POS. TC-22 memverifikasi stok positif pada API dan database, stok nol pada kalkulasi domain, serta penolakan status `completed` saat stok masih positif.
 
@@ -57,16 +59,17 @@ Semua TC-01 sampai TC-32 dijalankan pada [suite kontrak V4.5](../apps/api/test/v
 
 - Run P6-03 final menggunakan command pada tabel ringkasan. Output Jest: `Test Suites: 10 passed, 10 total`; `Tests: 121 passed, 121 total`; `Snapshots: 0 total`; `Time: 17.365 s`.
 - Preflight read-only (tanpa mencetak URL/password) mengonfirmasi `TEST_DATABASE_URL` adalah `localhost/pfi_test` dengan role `postgres`. `DATABASE_URL` runtime adalah `localhost/pfi_db` dengan role `pfi_app_runtime`; helper `getLocalTestRuntimeDatabaseUrl()` memetakan koneksi runtime suite ke `pfi_test`.
-- Snapshot read-only `pfi_db` sebelum dan sesudah run identik: `users=1`, `fish_species=6`, `batch_daily_sequences=1`, `batches=1`, `incoming_fish=1`, `incoming_fish_voids=1`, `idempotency_keys=2`, `audit_logs=2`. Data operasional tidak dihapus atau berubah oleh suite.
+- Run terbaru: `RUN_V45_DB_TESTS=1 npm run test --workspace @pfi/api -- --runInBand`; hasil Jest 10/10 suite dan 121/121 test lulus, tanpa skip atau failure.
+- Snapshot read-only pasca-run `pfi_db`: `users=1`, `fish_species=6`, `batch_daily_sequences=1`, `batches=1`, `incoming_fish=1`, `incoming_fish_voids=1`, `idempotency_keys=2`, `audit_logs=2`. Seluruh delapan tabel pada `pfi_test` berisi 0 baris setelah teardown.
 - TC-07 final mencatat 50 request, 50 batch code unik (`PFI-BCH-20000207-001` sampai `PFI-BCH-20000207-050`), error rate 0%, p50 625.26 ms, p95 931.10 ms, dan p99 973.60 ms. Assertion test p95 <= 1.500 ms lulus. Host dev lokal terukur 4 vCPU dan `MemTotal=7,812,100 kB` (sekitar 7.45 GiB RAM); kapasitas nominal memenuhi minimum 2 vCPU/4 GB, tetapi lingkungan ini bukan staging terkelola.
 - Sesudah teardown, query read-only pada `pfi_test` menunjukkan 0 baris di seluruh tabel `users`, `fish_species`, `batch_daily_sequences`, `batches`, `incoming_fish`, `incoming_fish_voids`, `idempotency_keys`, dan `audit_logs`.
 - Semua suite memakai URL test yang divalidasi sebagai `pfi_test`; tidak ada operasi test yang menargetkan `pfi_db`.
 
-## Blocker Gate
+## Verifikasi Akhir Gate
 
 TC-01 sampai TC-32 telah PASS. TC-20/28 memakai interface dependency yang diinjeksi dan test writer concurrent yang mengunci baris batch yang sama. Provider default V4.5 mengembalikan `false`, sesuai kondisi tidak adanya sumber dependent transaction yang approved. Tidak ada DDL atau endpoint POS, mortalitas, maupun pakan.
 
-Gate V4.5 tetap **BLOCKED** karena backup/restore rehearsal wajib belum dapat dijalankan: `pg_dump`, `pg_restore`, `createdb`, dan `dropdb` tidak terpasang, dan host ini tidak menyediakan Docker/Podman untuk menjalankan utilitas tersebut. Tidak ada dump palsu atau database rehearsal yang ditinggalkan.
+Bukti terminal yang disampaikan operator untuk rehearsal: backup `pfi_db`, restore dengan `pg_restore --exit-on-error --no-owner` ke `pfi_restore_check`, verifikasi `8 tables | 6 triggers | 6 species`, lalu `dropdb` dan cleanup dump. Rehearsal dijalankan pada host Pop!_OS lokal, bukan staging terkelola. Sesuai instruksi eksplisit pada sesi ini, bukti lokal tersebut diterima untuk Gate V4.5 sign-off; pengujian pada staging terkelola tidak diverifikasi.
 
 ## P6-04 — Performance dan Security
 
@@ -115,12 +118,12 @@ Output metrik aktual:
 | Dependency produksi | `npm audit --omit=dev` — 0 vulnerabilities | PASS |
 | Workspace checks | `npm run typecheck`, `npm run lint`, dan `npm run build` dijalankan; seluruh workspace selesai tanpa error | PASS |
 | Migrasi test | `npm run db:test:migrate --workspace @pfi/api`; 3 migrations ditemukan dan migrasi computed-stock berhasil diterapkan pada `pfi_test` | PASS |
-| Migrasi operasional | Status read-only menunjukkan 3 migrasi ditemukan dan `20261117000000_v45_computed_stock_guard` masih pending pada `pfi_db`; tidak diterapkan selama audit agar database tetap utuh tanpa backup rehearsal | NOT RUN; perlu prosedur perubahan database setelah backup |
+| Migrasi operasional | `prisma migrate status` pada `pfi_db`: 3 migrasi ditemukan dan database schema up to date, termasuk `20261117000000_v45_computed_stock_guard` | PASS; status diperiksa read-only |
 | Seed test | `npm run db:test:seed --workspace @pfi/api`; 6 spesies unik terverifikasi | PASS |
 | Owner provisioning | `npm run db:provision-owner` dijalankan dua kali; kedua run no-op. Fingerprint seluruh field sebelum/sesudah identik | PASS |
-| Backup/restore rehearsal | Native PostgreSQL utilities tidak tersedia; tidak ada `pfi_restore_check` dibuat | BLOCKED |
+| Backup/restore rehearsal | Operator melaporkan `pg_dump`/`pg_restore` sukses ke `pfi_restore_check`; terverifikasi 8 tabel, 6 trigger, 6 spesies; `dropdb` dan cleanup dump selesai | PASS untuk sign-off ini; dilakukan di host lokal, bukan staging terkelola |
 | Hardcoded secret pada source aplikasi | Pattern scan pada 67 file tracked di `apps/api/src`, `apps/api/prisma`, `apps/web/src`, dan `packages/shared/src`; tidak ditemukan private key, credentialed database URL, atau assignment secret literal. `.env.example` hanya berisi placeholder; test-only dummy values tidak diperlakukan sebagai credential produksi. | PASS untuk source ter-scan; bukan pengganti secret scanning pada CI/repository hosting |
-| `pfi_app_runtime` least privilege | Query katalog pada `pfi_test`: `rolsuper=false`, `rolcreatedb=false`, `rolcreaterole=false`, `rolreplication=false`, 0 role membership; SELECT/INSERT dan column UPDATE yang disetujui tersedia, mutation historis serta kolom identitas/payload ditolak. | PASS |
+| `pfi_app_runtime` least privilege | Read-only `pfi_db`: `rolsuper=false`, `rolcreatedb=false`, `rolcreaterole=false`, `rolreplication=false`; `has_schema_privilege('pfi_app_runtime', 'public', 'CREATE')=false`. Granular DML dan penolakan mutation historis juga diuji pada `pfi_test`. | PASS |
 | Auth rate limit | `AuthController` membatasi 5 request per 60 detik; [auth.e2e.spec.ts](../apps/api/test/auth.e2e.spec.ts) menguji respons `429 RATE_LIMIT_EXCEEDED`. | PASS |
 | Input boundary | [receiving-schemas.spec.ts](../apps/api/test/receiving-schemas.spec.ts), [core-api.e2e.spec.ts](../apps/api/test/core-api.e2e.spec.ts), dan TC-02/03/11/19/23–27 menguji rentang, enum, format, tanggal bisnis, dan field tambahan. | PASS untuk batas penerimaan yang diimplementasikan |
 | Error sanitization | `core-api.e2e.spec.ts` dan `auth.e2e.spec.ts` memastikan SQL, stack, dan detail koneksi internal tidak muncul pada respons; error DB dipetakan ke envelope publik. | PASS |
@@ -128,6 +131,8 @@ Output metrik aktual:
 
 ### Gate V4.5 Sign-off
 
-**Keputusan resmi: Gate V4.5 tetap BLOCKED, bukan PASS.** Seluruh 32 TC, build/checks, benchmark lokal, migrasi+seed `pfi_test`, dan provisioning idempotent telah lulus. Syarat yang belum terpenuhi adalah backup/restore rehearsal yang diwajibkan implementation plan; migrasi computed-stock juga belum diterapkan ke `pfi_db` operasional karena rehearsal backup tidak tersedia. `pfi_db` tidak diubah oleh suite maupun provisioning.
+**Keputusan resmi: Gate V4.5 — APPROVED / PASS.** Seluruh 32 TC lulus; suite ulang menghasilkan 10 suite dan 121 test lulus; `typecheck`, `lint`, dan `build` lulus; `pfi_db` up to date pada 3 migrasi; role runtime tidak memiliki hak `CREATE` schema; 8 tabel V4.5, 6 trigger aktif, 1 akun Owner aktif, dan 0 tabel POS terverifikasi. Rehearsal backup/restore lulus dengan hasil 8 tabel, 6 trigger, dan 6 spesies. `pfi_test` bersih setelah suite.
 
-Tidak ada DDL tabel atau endpoint POS yang dibuat. Database function/guard yang ditambahkan hanya untuk computed stock V4.5 dan telah diterapkan pada `pfi_test`. Gate POS tidak dibuka sampai rehearsal backup/restore dapat dijalankan dan perubahan migrasi operasional ditinjau dengan prosedur backup yang aman.
+Catatan lingkungan: checklist implementation plan menyebut staging untuk backup/restore. Bukti yang diberikan berasal dari host Pop!_OS lokal; pengujian staging terkelola belum diverifikasi dan diterima sebagai pengecualian untuk sign-off ini sesuai instruksi eksplisit pada sesi ini. P6-04 tetap PARTIAL hanya untuk kriteria benchmark pada staging terkelola.
+
+Tidak ada DDL tabel atau endpoint POS yang dibuat. Database function/guard yang diterapkan hanya untuk computed stock V4.5. Gate POS siap memasuki pembahasan spesifikasi teknis untuk `TBD-03`, `TBD-04`, dan `TBD-06`; status TBD tetap belum diselesaikan dan tidak ada implementasi POS yang dimulai.
