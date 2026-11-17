@@ -164,8 +164,9 @@ databaseSuite(
 
       await admin.$executeRaw`
       TRUNCATE TABLE
-        "audit_logs", "incoming_fish_voids", "incoming_fish", "batches",
-        "idempotency_keys", "batch_daily_sequences", "users", "fish_species"
+        "audit_logs", "fish_sale_voids", "fish_sales", "fish_sale_prices",
+        "incoming_fish_voids", "incoming_fish", "batches", "idempotency_keys",
+        "sale_daily_sequences", "batch_daily_sequences", "users", "fish_species"
       RESTART IDENTITY
     `;
       const populationPrefix = `v45-benchmark-${randomUUID()}-`;
@@ -203,8 +204,9 @@ databaseSuite(
       if (admin) {
         await admin.$executeRaw`
         TRUNCATE TABLE
-          "audit_logs", "incoming_fish_voids", "incoming_fish", "batches",
-          "idempotency_keys", "batch_daily_sequences", "users", "fish_species"
+          "audit_logs", "fish_sale_voids", "fish_sales", "fish_sale_prices",
+          "incoming_fish_voids", "incoming_fish", "batches", "idempotency_keys",
+          "sale_daily_sequences", "batch_daily_sequences", "users", "fish_species"
         RESTART IDENTITY
       `;
         await admin.$disconnect();

@@ -309,7 +309,7 @@ describe("V4.5 core API HTTP integration", () => {
   );
 
   it.each(protectedEndpointRequests(() => accessToken("Kasir")))(
-    "$name rejects Kasir because it is not a V4.5 role",
+    "$name denies Kasir access to non-POS endpoints",
     async ({ send }) => {
       prismaMock.user.findUnique.mockResolvedValue({
         id: actorId,
@@ -321,8 +321,8 @@ describe("V4.5 core API HTTP integration", () => {
 
       const response = await send();
 
-      expect(response.status).toBe(401);
-      expect(response.body.error.code).toBe("UNAUTHORIZED");
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe("FORBIDDEN");
     },
   );
 

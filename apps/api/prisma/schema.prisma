@@ -1,128 +1,202 @@
 generator client {
-    provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-    provider  = "postgresql"
-    url       = env("DATABASE_URL")
-    directUrl = env("MIGRATION_DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("MIGRATION_DATABASE_URL")
 }
 
 model User {
-    id           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-    name         String             @db.VarChar(255)
-    email        String             @db.VarChar(255)
-    passwordHash String             @map("password_hash") @db.VarChar(255)
-    role         String             @db.VarChar(50)
-    isActive     Boolean            @default(true) @map("is_active")
-    createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-    batches      Batch[]
-    incomingFish IncomingFish[]
-    voids        IncomingFishVoid[]
-    idempotency  IdempotencyKey[]
-    auditLogs    AuditLog[]
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name              String             @db.VarChar(255)
+  email             String             @db.VarChar(255)
+  passwordHash      String             @map("password_hash") @db.VarChar(255)
+  role              String             @db.VarChar(50)
+  isActive          Boolean            @default(true) @map("is_active")
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  batches           Batch[]
+  incomingFish      IncomingFish[]
+  voids             IncomingFishVoid[]
+  idempotency       IdempotencyKey[]
+  auditLogs         AuditLog[]
+  salePricesCreated FishSalePrice[]    @relation("FishSalePriceCreatedBy")
+  salePricesUpdated FishSalePrice[]    @relation("FishSalePriceUpdatedBy")
+  fishSales         FishSale[]
+  fishSaleVoids     FishSaleVoid[]
 
-    @@map("users")
+  @@map("users")
 }
 
 model FishSpecies {
-    id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-    speciesCode String   @unique(map: "fish_species_species_code_key") @map("species_code") @db.VarChar(50)
-    speciesName String   @map("species_name") @db.VarChar(100)
-    isActive    Boolean  @default(true) @map("is_active")
-    createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-    batches     Batch[]
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  speciesCode String          @unique(map: "fish_species_species_code_key") @map("species_code") @db.VarChar(50)
+  speciesName String          @map("species_name") @db.VarChar(100)
+  isActive    Boolean         @default(true) @map("is_active")
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  batches     Batch[]
+  salePrices  FishSalePrice[]
 
-    @@map("fish_species")
+  @@map("fish_species")
 }
 
 model BatchDailySequence {
-    entryDate  DateTime @id @map("entry_date") @db.Date
-    lastNumber Int      @default(0) @map("last_number")
+  entryDate  DateTime @id @map("entry_date") @db.Date
+  lastNumber Int      @default(0) @map("last_number")
 
-    @@map("batch_daily_sequences")
+  @@map("batch_daily_sequences")
 }
 
 model Batch {
-    id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-    batchCode    String        @unique(map: "batches_batch_code_key") @map("batch_code") @db.VarChar(50)
-    speciesId    String        @map("species_id") @db.Uuid
-    status       String        @db.VarChar(20)
-    createdBy    String        @map("created_by") @db.Uuid
-    createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-    species      FishSpecies   @relation(fields: [speciesId], references: [id], onDelete: Restrict, map: "batches_species_id_fkey")
-    creator      User          @relation(fields: [createdBy], references: [id], onDelete: Restrict, map: "batches_created_by_fkey")
-    incomingFish IncomingFish?
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batchCode    String        @unique(map: "batches_batch_code_key") @map("batch_code") @db.VarChar(50)
+  speciesId    String        @map("species_id") @db.Uuid
+  status       String        @db.VarChar(20)
+  createdBy    String        @map("created_by") @db.Uuid
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  species      FishSpecies   @relation(fields: [speciesId], references: [id], onDelete: Restrict, map: "batches_species_id_fkey")
+  creator      User          @relation(fields: [createdBy], references: [id], onDelete: Restrict, map: "batches_created_by_fkey")
+  incomingFish IncomingFish?
+  fishSales    FishSale[]
 
-    @@index([status, createdAt(sort: Desc), id(sort: Desc)], map: "idx_batches_status_created_at_id")
-    @@index([createdAt(sort: Desc), id(sort: Desc)], map: "idx_batches_created_at_id")
-    @@map("batches")
+  @@index([status, createdAt(sort: Desc), id(sort: Desc)], map: "idx_batches_status_created_at_id")
+  @@index([createdAt(sort: Desc), id(sort: Desc)], map: "idx_batches_created_at_id")
+  @@map("batches")
 }
 
 model IncomingFish {
-    id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-    batchId            String            @unique(map: "incoming_fish_batch_id_key") @map("batch_id") @db.Uuid
-    entryDate          DateTime          @map("entry_date") @db.Date
-    quantity           Int
-    purchaseCapital    Decimal           @map("purchase_capital") @db.Decimal(18, 2)
-    shippingCapital    Decimal           @map("shipping_capital") @db.Decimal(18, 2)
-    weightSamplePer500 Decimal?          @map("weight_sample_per_500") @db.Decimal(12, 2)
-    fishSize           String            @map("fish_size") @db.VarChar(20)
-    createdBy          String            @map("created_by") @db.Uuid
-    createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-    batch              Batch             @relation(fields: [batchId], references: [id], onDelete: Restrict, map: "incoming_fish_batch_id_fkey")
-    creator            User              @relation(fields: [createdBy], references: [id], onDelete: Restrict, map: "incoming_fish_created_by_fkey")
-    void               IncomingFishVoid?
+  id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batchId            String            @unique(map: "incoming_fish_batch_id_key") @map("batch_id") @db.Uuid
+  entryDate          DateTime          @map("entry_date") @db.Date
+  quantity           Int
+  purchaseCapital    Decimal           @map("purchase_capital") @db.Decimal(18, 2)
+  shippingCapital    Decimal           @map("shipping_capital") @db.Decimal(18, 2)
+  weightSamplePer500 Decimal?          @map("weight_sample_per_500") @db.Decimal(12, 2)
+  fishSize           String            @map("fish_size") @db.VarChar(20)
+  createdBy          String            @map("created_by") @db.Uuid
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  batch              Batch             @relation(fields: [batchId], references: [id], onDelete: Restrict, map: "incoming_fish_batch_id_fkey")
+  creator            User              @relation(fields: [createdBy], references: [id], onDelete: Restrict, map: "incoming_fish_created_by_fkey")
+  void               IncomingFishVoid?
 
-    @@index([createdAt(sort: Desc), id(sort: Desc)], map: "idx_incoming_fish_created_at_id")
-    @@index([entryDate, createdAt(sort: Desc)], map: "idx_incoming_fish_entry_date_created_at")
-    @@map("incoming_fish")
+  @@index([createdAt(sort: Desc), id(sort: Desc)], map: "idx_incoming_fish_created_at_id")
+  @@index([entryDate, createdAt(sort: Desc)], map: "idx_incoming_fish_entry_date_created_at")
+  @@map("incoming_fish")
 }
 
 model IncomingFishVoid {
-    id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-    incomingFishId String       @unique(map: "incoming_fish_voids_incoming_fish_id_key") @map("incoming_fish_id") @db.Uuid
-    reason         String       @db.Text
-    voidedBy       String       @map("voided_by") @db.Uuid
-    voidedAt       DateTime     @default(now()) @map("voided_at") @db.Timestamptz(6)
-    incomingFish   IncomingFish @relation(fields: [incomingFishId], references: [id], onDelete: Restrict, map: "incoming_fish_voids_incoming_fish_id_fkey")
-    actor          User         @relation(fields: [voidedBy], references: [id], onDelete: Restrict, map: "incoming_fish_voids_voided_by_fkey")
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incomingFishId String       @unique(map: "incoming_fish_voids_incoming_fish_id_key") @map("incoming_fish_id") @db.Uuid
+  reason         String       @db.Text
+  voidedBy       String       @map("voided_by") @db.Uuid
+  voidedAt       DateTime     @default(now()) @map("voided_at") @db.Timestamptz(6)
+  incomingFish   IncomingFish @relation(fields: [incomingFishId], references: [id], onDelete: Restrict, map: "incoming_fish_voids_incoming_fish_id_fkey")
+  actor          User         @relation(fields: [voidedBy], references: [id], onDelete: Restrict, map: "incoming_fish_voids_voided_by_fkey")
 
-    @@map("incoming_fish_voids")
+  @@map("incoming_fish_voids")
 }
 
 model IdempotencyKey {
-    id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-    userId         String    @map("user_id") @db.Uuid
-    endpoint       String    @db.VarChar(255)
-    idempotencyKey String    @map("idempotency_key") @db.Uuid
-    payloadHash    String    @map("payload_hash") @db.VarChar(64)
-    status         String    @db.VarChar(20)
-    responseStatus Int?      @map("response_status")
-    responseBody   Json?     @map("response_body") @db.JsonB
-    createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-    completedAt    DateTime? @map("completed_at") @db.Timestamptz(6)
-    user           User      @relation(fields: [userId], references: [id], onDelete: Restrict, map: "idempotency_keys_user_id_fkey")
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  endpoint       String    @db.VarChar(255)
+  idempotencyKey String    @map("idempotency_key") @db.Uuid
+  payloadHash    String    @map("payload_hash") @db.VarChar(64)
+  status         String    @db.VarChar(20)
+  responseStatus Int?      @map("response_status")
+  responseBody   Json?     @map("response_body") @db.JsonB
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt    DateTime? @map("completed_at") @db.Timestamptz(6)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Restrict, map: "idempotency_keys_user_id_fkey")
 
-    @@unique([userId, endpoint, idempotencyKey], map: "idx_idempotency_user_endpoint_key")
-    @@map("idempotency_keys")
+  @@unique([userId, endpoint, idempotencyKey], map: "idx_idempotency_user_endpoint_key")
+  @@map("idempotency_keys")
 }
 
 model AuditLog {
-    id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-    requestId  String   @map("request_id") @db.VarChar(255)
-    actorId    String   @map("actor_id") @db.Uuid
-    action     String   @db.VarChar(50)
-    entityType String   @map("entity_type") @db.VarChar(50)
-    entityId   String   @map("entity_id") @db.Uuid
-    oldValues  Json?    @map("old_values") @db.JsonB
-    newValues  Json?    @map("new_values") @db.JsonB
-    reason     String?  @db.Text
-    ipAddress  String?  @map("ip_address") @db.VarChar(45)
-    createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-    actor      User     @relation(fields: [actorId], references: [id], onDelete: Restrict, map: "audit_logs_actor_id_fkey")
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestId  String   @map("request_id") @db.VarChar(255)
+  actorId    String   @map("actor_id") @db.Uuid
+  /// Allowed values are enforced by the additive PostgreSQL CHECK constraint.
+  action     String   @db.VarChar(50)
+  entityType String   @map("entity_type") @db.VarChar(50)
+  entityId   String   @map("entity_id") @db.Uuid
+  oldValues  Json?    @map("old_values") @db.JsonB
+  newValues  Json?    @map("new_values") @db.JsonB
+  reason     String?  @db.Text
+  ipAddress  String?  @map("ip_address") @db.VarChar(45)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  actor      User     @relation(fields: [actorId], references: [id], onDelete: Restrict, map: "audit_logs_actor_id_fkey")
 
-    @@index([createdAt(sort: Desc), id(sort: Desc)], map: "idx_audit_logs_created_at_id")
-    @@index([action, createdAt(sort: Desc)], map: "idx_audit_logs_action_created_at")
-    @@map("audit_logs")
+  @@index([createdAt(sort: Desc), id(sort: Desc)], map: "idx_audit_logs_created_at_id")
+  @@index([action, createdAt(sort: Desc)], map: "idx_audit_logs_action_created_at")
+  @@map("audit_logs")
+}
+
+model SaleDailySequence {
+  saleDate   DateTime @id @map("sale_date") @db.Date
+  /// Must be non-negative; enforced by the SQL CHECK constraint.
+  lastNumber BigInt   @default(0) @map("last_number")
+
+  @@map("sale_daily_sequences")
+}
+
+model FishSalePrice {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  speciesId    String      @map("species_id") @db.Uuid
+  /// Uses the V4.5 size catalog; PostgreSQL CHECK remains the authority.
+  fishSize     String      @map("fish_size") @db.VarChar(20)
+  /// Integer Rupiah 1..10,000,000; enforced by the SQL CHECK constraint.
+  pricePerFish BigInt      @map("price_per_fish")
+  createdBy    String      @map("created_by") @db.Uuid
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy    String      @map("updated_by") @db.Uuid
+  updatedAt    DateTime    @default(now()) @map("updated_at") @db.Timestamptz(6)
+  species      FishSpecies @relation(fields: [speciesId], references: [id], onDelete: Restrict, map: "fish_sale_prices_species_id_fkey")
+  creator      User        @relation("FishSalePriceCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, map: "fish_sale_prices_created_by_fkey")
+  updater      User        @relation("FishSalePriceUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, map: "fish_sale_prices_updated_by_fkey")
+
+  @@unique([speciesId, fishSize], map: "fish_sale_prices_species_id_fish_size_key")
+  @@index([createdBy], map: "idx_fish_sale_prices_created_by")
+  @@index([updatedBy], map: "idx_fish_sale_prices_updated_by")
+  @@index([createdAt(sort: Desc), id(sort: Desc)], map: "idx_fish_sale_prices_created_at_id")
+  @@map("fish_sale_prices")
+}
+
+model FishSale {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  saleCode      String        @unique(map: "fish_sales_sale_code_key") @map("sale_code") @db.VarChar(50)
+  batchId       String        @map("batch_id") @db.Uuid
+  /// Positive integer count; bounded by computed stock in the SQL trigger.
+  quantity      Int
+  /// Snapshot integer Rupiah; checks and multiplication are enforced in SQL.
+  unitPrice     BigInt        @map("unit_price")
+  totalAmount   BigInt        @map("total_amount")
+  /// Valid values and cash/transfer field rules are enforced by SQL CHECK constraints.
+  paymentMethod String        @map("payment_method") @db.VarChar(20)
+  cashReceived  BigInt?       @map("cash_received")
+  changeAmount  BigInt?       @map("change_amount")
+  createdBy     String        @map("created_by") @db.Uuid
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  batch         Batch         @relation(fields: [batchId], references: [id], onDelete: Restrict, map: "fish_sales_batch_id_fkey")
+  creator       User          @relation(fields: [createdBy], references: [id], onDelete: Restrict, map: "fish_sales_created_by_fkey")
+  void          FishSaleVoid?
+
+  @@index([batchId], map: "idx_fish_sales_batch_id")
+  @@index([createdBy], map: "idx_fish_sales_created_by")
+  @@index([createdAt(sort: Desc), id(sort: Desc)], map: "idx_fish_sales_created_at_id")
+  @@map("fish_sales")
+}
+
+model FishSaleVoid {
+  id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  saleId   String   @unique(map: "fish_sale_voids_sale_id_key") @map("sale_id") @db.Uuid
+  voidedBy String   @map("voided_by") @db.Uuid
+  voidedAt DateTime @default(now()) @map("voided_at") @db.Timestamptz(6)
+  sale     FishSale @relation(fields: [saleId], references: [id], onDelete: Restrict, map: "fish_sale_voids_sale_id_fkey")
+  actor    User     @relation(fields: [voidedBy], references: [id], onDelete: Restrict, map: "fish_sale_voids_voided_by_fkey")
+
+  @@index([voidedBy], map: "idx_fish_sale_voids_voided_by")
+  @@map("fish_sale_voids")
 }

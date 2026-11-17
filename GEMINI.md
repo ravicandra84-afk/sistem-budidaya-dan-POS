@@ -185,7 +185,7 @@ The following business behavior is confirmed. The technical POS design still has
 - Only `Owner` and `Admin Operasional` can add or edit the price catalog.
 - The price catalog cannot be deleted within this MVP.
 - Reprinting a receipt is limited to the original sale creator (`created_by`) and only while that sale is not VOID.
-- Role `Kasir` is explicitly denied (`Forbidden`) access to audit-log data and the audit-log page (`APPROVED — OWNER`, `TBD-07`). Additionally, `Kepala Budidaya` may view audit-log entries only for Receiving/Batch actions (`CREATE_ENTRY`, `VOID_ENTRY`) and must not see POS sales audit entries (`CREATE_SALE`, `VOID_SALE`, `UPDATE_PRICE`).
+- Role `Kasir` is explicitly denied (`Forbidden`) access to audit-log data and the audit-log page (`APPROVED — OWNER`, `TBD-07`). Additionally, `Kepala Budidaya` may view audit-log entries only for Receiving/Batch actions (`CREATE_ENTRY`, `VOID_ENTRY`) and must not see POS audit entries (`CREATE_SALE`, `VOID_SALE`, `CREATE_SALE_PRICE`, `UPDATE_SALE_PRICE`).
 
 ### 7.2 Batch selection and quantity
 
@@ -253,7 +253,7 @@ Do not add sale number, batch code, customer information, transfer reference, or
 - A user may retry printing using the existing sale; retrying print must not create a new sale.
 - Reprint is allowed only for the original creator and only for a non-VOID sale.
 - Support receipt layouts for both 58 mm and 80 mm paper.
-- Client-side printing is `APPROVED — OWNER` in `architecture.md` (ESC/POS over Bluetooth for mobile; Web USB or Browser Web Print for PC/laptop), while actual printer models and cross-OS device compatibility remain `TBD-03`. Note that iOS/iPhone web browsers do not support Web Bluetooth natively; verify native wrapper or print-bridge requirements and test the actual printer/device matrix before finalizing integration.
+- Client-side browser printing is `APPROVED — OWNER` in [ADR 0002](docs/adr/0002-pos-gate-architecture.md): CSS layouts for 58 mm and 80 mm with the system print dialog are the baseline. Do not claim compatibility for a specific printer/device combination until GPOS-04 physically tests it. Direct ESC/POS Bluetooth, WebUSB, Web Serial, native wrappers, and print bridges are not part of the approved baseline.
 
 ## 8. Decisions tracking: approved vs unresolved (`TBD`)
 
@@ -262,18 +262,18 @@ Do not add sale number, batch code, customer information, transfer reference, or
 Do not treat these as open blockers; implement them consistently with `architecture.md`:
 
 - `TBD-01` (`APPROVED — OWNER`): maximum allowed price per fish is **Rp 10,000,000** (integer Rupiah without decimals, enforced at validation and database layers).
-- `TBD-02` (`APPROVED — OWNER`): price-catalog changes are recorded in `audit_logs` with `action = 'UPDATE_PRICE'` storing actor (`actor_id`) and timestamp (`created_at`) only (`old_values = NULL`, `new_values = NULL`); no price-history feature is built.
+- `TBD-02` (`APPROVED — OWNER`, ADR 0002 amendment): price creation is recorded as `CREATE_SALE_PRICE` and price update as `UPDATE_SALE_PRICE`, storing actor (`actor_id`) and timestamp (`created_at`) only (`old_values = NULL`, `new_values = NULL`); no price-history feature is built.
 - `TBD-05` (`APPROVED — OWNER`): daily global sales sequence uses table `sale_daily_sequences` (`sale_date DATE PRIMARY KEY`, `last_number BIGINT NOT NULL CHECK (last_number >= 0)`) with minimum 3-digit zero-padding (`001`–`999`) expanding automatically beyond 999 (`1000`, `1001`, ...).
-- `TBD-06` — Audit Actions (`APPROVED — OWNER`): POS audit action names are `CREATE_SALE`, `VOID_SALE`, and `UPDATE_PRICE`.
+- `TBD-06` — Audit Actions (`APPROVED — OWNER`, ADR 0002 amendment): POS audit action names are `CREATE_SALE`, `VOID_SALE`, `CREATE_SALE_PRICE`, and `UPDATE_SALE_PRICE`.
 - `TBD-07` (`APPROVED — OWNER`): role `Kasir` is explicitly denied (`Forbidden`) access to audit-log endpoints and UI pages.
+- `TBD-03` (`APPROVED — OWNER`, ADR 0002): browser print CSS 58/80 mm and system print dialog are the approved baseline; physical printer/device verification remains required at GPOS-04.
+- `TBD-04` (`APPROVED — OWNER`, ADR 0002): normative POS API routes, payloads, response envelopes, errors, pagination/filtering, idempotency, and RBAC are in `docs/pos-api-contract.md`.
+- `TBD-06` DDL/runtime (`APPROVED — OWNER`, ADR 0002): four-table schema, computed stock extension, triggers, dependent transaction guard, audit actions, indexes, and granular `pfi_app_runtime` grants are approved for later implementation.
 
 ### 8.2 Remaining unresolved decisions (`TBD — NEEDS DECISION` — never guess)
 
 Treat the following remaining open items as implementation blockers when they affect the assigned task:
 
-- `TBD-03`: actual printer brand/model, Bluetooth protocol, SDK/library, pairing method, iOS/iPhone printing bridge/wrapper approach, and tested cross-OS device compatibility matrix (`Gate POS` / `GPOS-04`).
-- `TBD-04`: final POS API request/response schemas, error codes (including concurrency/price-change rollback handling and fresh `Idempotency-Key` requirement), and price refresh/confirmation contract (`Gate POS` / `GPOS-03`). Base list pagination/filter defaults are approved in ADR 0001; POS envelope details remain subject to its API gate.
-- `TBD-06` — DDL & Runtime Privileges: final POS database triggers, `ALTER CONSTRAINT` DDL scripts, indexes, and runtime `GRANT`/`REVOKE` privileges (`Gate POS` / `GPOS-02`).
 - `TBD-08` (partially resolved in ADR 0001): local initial `Owner` provisioning by idempotent CLI from `.env` is approved. Account deactivation, role changes, password reset, and user administration remain unresolved.
 - `TBD-09` (base behavior approved in ADR 0001): `page=1`, `limit=20` (maximum 100), ISO 8601 `startDate`/`endDate` on the primary transaction timestamp, official status values only, and newest-first ordering. Search and additional sort options remain unresolved.
 
@@ -319,7 +319,7 @@ Do not code around an open `TBD` by inventing a default. You may investigate opt
 ### 9.5 API behavior and error handling
 
 - Preserve approved V4.5 endpoint paths, payload fields, response envelopes, HTTP statuses, and error codes.
-- POS candidate endpoints are not final until `TBD-04` and the POS API contract are approved.
+- POS endpoints and payloads are locked by ADR 0002 and `docs/pos-api-contract.md`; do not change them without an explicit owner-approved decision.
 - Validate input at the UI, backend, and database layers according to each layer's responsibility.
 - Return actionable, stable errors; do not expose SQL statements, stack traces, secrets, or internal infrastructure details to end users.
 - Never turn a failed or uncertain request into an automatic second business mutation with a new idempotency key.

@@ -12,7 +12,7 @@
 **Cara membaca dokumen:**
 
 1. Bagian I adalah sumber V4.5. Teksnya disalin langsung dari dokumen sumber tanpa konversi format atau perubahan isi.
-2. Bagian II adalah perluasan untuk Ikan Keluar (Kasir/POS). Rancangan teknis yang belum disetujui tetap ditandai sebagai usulan dan bukan kontrak implementasi final.
+2. Bagian II adalah perluasan untuk Ikan Keluar (Kasir/POS). Keputusan teknis TBD-03, TBD-04, dan TBD-06 telah disetujui melalui [ADR 0002](docs/adr/0002-pos-gate-architecture.md); kontrak API normatif berada di [docs/pos-api-contract.md](docs/pos-api-contract.md). Uji perangkat fisik GPOS-04 tetap wajib sebelum klaim kompatibilitas.
 3. Aturan VOID penerimaan pada V4.5 tetap memerlukan alasan dan tetap tunduk pada aturan transaksi turunan. Aturan VOID penjualan POS adalah aturan terpisah: tidak memerlukan alasan dan membatalkan satu transaksi penjualan secara utuh.
 4. Penambahan POS tidak menghapus atau menggantikan aturan penerimaan, identitas batch 1:1, computed stock, append-only, RBAC, idempotency, ACID, dan audit pada V4.5.
 
@@ -833,12 +833,12 @@ pada batch yang sama harus diserialisasi melalui lock yang sama. -
 Perubahan stok dan status batch harus konsisten dalam satu transaksi
 ACID.
 
-## 11. Rancangan data POS (usulan, belum kontrak final)
+## 11. Rancangan data POS (disetujui melalui ADR 0002; belum diimplementasikan)
 
-Bagian ini adalah rancangan konseptual untuk ditinjau. Nama kolom dan
-constraint dapat disempurnakan pada tahap finalisasi kontrak database,
-tetapi aturan bisnis yang sudah diputuskan tidak boleh berubah tanpa
-persetujuan.
+Bagian ini dibaca bersama ADR 0002 yang mengunci empat tabel POS,
+constraints, triggers, kalkulasi stok, dependent transaction guard, dan
+granular runtime privileges. Detail implementasi database harus mengikuti
+ADR tersebut; belum ada objek POS yang diterapkan ke database.
 
 ### 11.1 Tabel `fish_sale_prices`
 
@@ -998,92 +998,13 @@ Perubahan yang diperlukan untuk mendukung POS:
   kontrak teknis karena keputusan bisnis menyatakan tidak menyimpan
   riwayat harga katalog.
 
-## 12. Rancangan API POS (usulan, belum kontrak final)
+## 12. Kontrak API POS (`APPROVED — OWNER`, ADR 0002)
 
-Semua endpoint di bawah merupakan rancangan awal untuk pembahasan.
-Kontrak request/response, error code, dan skema validasi final belum
-dikunci.
-
-### 12.1 Melihat batch yang dapat dijual
-
-`GET /api/v1/pos/batches`
-
-Tujuan: - Mengambil batch `active` yang memiliki stok valid lebih dari 0. - Menyediakan spesies, ukuran, kode batch, stok tersedia, dan harga
-jual jika tersedia. - Batch tanpa harga ditandai tidak dapat dijual. -
-Daftar tidak boleh menampilkan batch `completed` atau `voided` sebagai
-pilihan penjualan.
-
-### 12.2 Melihat detail batch untuk POS
-
-`GET /api/v1/pos/batches/{batch_id}`
-
-Tujuan: - Memuat ulang detail batch yang dipilih. - Memuat stok
-terkini. - Memuat harga terkini berdasarkan spesies dan ukuran. -
-Menjadi sumber refresh harga dan stok sebelum kasir mengonfirmasi
-transaksi.
-
-### 12.3 Mengelola harga
-
-Usulan endpoint: - `GET /api/v1/pos/prices` -
-`POST /api/v1/pos/prices` - `PATCH /api/v1/pos/prices/{price_id}`
-
-Akses: - GET: role POS yang diizinkan melihat informasi harga. - POST
-dan PATCH: hanya `Owner` dan `Admin Operasional`.
-
-Ketentuan: - POST hanya untuk kombinasi spesies dan ukuran yang belum
-memiliki harga. - PATCH untuk mengubah harga kombinasi yang sudah ada. -
-Tidak ada endpoint DELETE dalam cakupan saat ini. - Harga menggunakan
-Rupiah bulat. - Perubahan harga tidak mengubah snapshot pada
-`fish_sales` yang sudah tersimpan.
-
-### 12.4 Membuat penjualan
-
-`POST /api/v1/fish-sales`
-
-Headers: - `Authorization: Bearer <jwt_token>` -
-`Idempotency-Key: <UUIDv4>` - `Content-Type: application/json`
-
-Data bisnis konseptual: - `batch_id` - `quantity` - `unit_price` yang
-telah diperbarui dan dikonfirmasi - `payment_method` - `cash_received`
-untuk Tunai
-
-Backend wajib mengambil data batch dan harga terkini dari database serta
-tidak mempercayai total hitungan frontend. Backend harus memvalidasi
-ulang harga, stok, status batch, jumlah, pembayaran, dan hak akses dalam
-transaksi atomik.
-
-### 12.5 Melihat transaksi penjualan
-
-Usulan endpoint: - `GET /api/v1/fish-sales` -
-`GET /api/v1/fish-sales/{sale_id}`
-
-Akses: `Owner`, `Admin Operasional`, dan `Kasir`.
-
-Semua role POS dapat melihat seluruh transaksi penjualan sesuai
-keputusan bisnis.
-
-### 12.6 VOID penjualan
-
-`POST /api/v1/fish-sales/{sale_id}/void`
-
-Headers: - `Authorization: Bearer <jwt_token>` -
-`Idempotency-Key: <UUIDv4>` - `Content-Type: application/json`
-
-Ketentuan: - Akses: `Owner`, `Admin Operasional`, dan `Kasir`. - Tidak
-mewajibkan `reason`. - Satu transaksi hanya dapat di-VOID satu kali. -
-Backend mengunci batch terkait, membuat reversal, memperbarui status
-batch berdasarkan stok valid, dan menulis audit dalam satu transaksi
-ACID.
-
-### 12.7 Cetak ulang struk
-
-Usulan endpoint: `GET /api/v1/fish-sales/{sale_id}/receipt`
-
-Ketentuan: - Hanya pembuat transaksi (`created_by`) yang boleh meminta
-cetak ulang. - Transaksi yang sudah di-VOID tidak dapat dicetak ulang. -
-Kegagalan printer tidak mengubah status transaksi. - Pemanggilan cetak
-ulang tidak membuat transaksi penjualan baru. - Implementasi koneksi
-printer tidak ditetapkan dalam blueprint ini.
+Kontrak endpoint, request/response, pagination/filter, idempotency, RBAC,
+dan kode error POS yang normatif dipelihara di
+[docs/pos-api-contract.md](docs/pos-api-contract.md). Route memakai prefix
+`/api/v1/pos/*`; kontrak lama yang memakai `/api/v1/fish-sales` tidak lagi
+menjadi acuan implementasi.
 
 ## 13. Format struk POS
 
@@ -1105,8 +1026,9 @@ Kasir   : [nama kasir]
        TERIMA KASIH
 ```
 
-Contoh di atas hanya ilustrasi tata letak konten. Nomor transaksi
-internal dan kode batch tidak dicetak.
+Contoh di atas hanya ilustrasi tata letak konten. Struk hanya memuat
+sembilan field yang disetujui ADR 0002. Nomor transaksi internal dan kode
+batch tidak dicetak; berat dan watermark VOID juga tidak ditambahkan.
 
 ### 13.2 Ukuran kertas dan kegagalan cetak
 
@@ -1115,8 +1037,11 @@ internal dan kode batch tidak dicetak.
 - Hasil cetak tidak menjadi prasyarat keberhasilan transaksi.
 - Jika cetak gagal, status transaksi tetap berhasil dan fungsi cetak
   ulang tersedia bagi pembuat transaksi.
-- Perangkat Android, iPhone, PC, dan laptop merupakan target perangkat
-  kasir, tetapi kompatibilitas printer aktual harus diuji.
+- Browser print CSS 58 mm/80 mm dengan dialog cetak sistem adalah baseline
+  yang disetujui ADR 0002 tanpa driver/protokol khusus aplikasi. OS masih
+  dapat memerlukan driver atau dukungan printer native. Perangkat Android,
+  iPhone, PC, dan laptop tetap memerlukan verifikasi printer fisik GPOS-04
+  sebelum kompatibilitasnya dinyatakan didukung.
 
 ## 14. Validasi bisnis dan error handling POS
 
@@ -1288,11 +1213,11 @@ bernomor pada tahap kontrak QA final.
 Keputusan bisnis utama POS telah dijawab, dan sebagian besar keputusan teknis telah ditetapkan oleh pemilik produk pada `architecture.md` (`APPROVED — OWNER`), sementara item yang tersisa wajib dikunci pada `Gate POS` sebelum coding:
 
 1.  **Batas maksimum harga per ekor (`TBD-01` — `APPROVED — OWNER`):** ditetapkan minimal **Rp 1** dan maksimum **Rp 10.000.000** per ekor menggunakan tipe `BIGINT` (bilangan bulat Rupiah tanpa desimal).
-2.  **Pencatatan audit perubahan daftar harga (`TBD-02` — `APPROVED — OWNER`):** perubahan harga dicatat ke `audit_logs` dengan `action = 'UPDATE_PRICE'` yang hanya menyimpan aktor (`actor_id`) dan waktu (`created_at`), dengan `old_values = NULL` dan `new_values = NULL` (tanpa riwayat harga katalog).
-3.  **Spesifikasi printer aktual (`TBD-03` — `TBD — NEEDS DECISION`):** pendekatan cetak sisi klien (ESC/POS Bluetooth untuk mobile; Web USB/Browser Print untuk PC/laptop) telah disetujui, tetapi merek/model printer, solusi bridge Bluetooth iOS/iPhone, dan uji kompatibilitas fisik lintas perangkat wajib diselesaikan pada `GPOS-04`.
-4.  **Detail kontrak API final (`TBD-04` — `TBD — NEEDS DECISION`):** endpoint, bentuk request/response, kode error spesifik (termasuk rollback konkurensi/harga berubah dan kewajiban `Idempotency-Key` baru), pagination, serta strategi refresh/konfirmasi harga perlu dikunci pada `GPOS-03` sebelum dianggap kontrak implementasi.
+2.  **Pencatatan audit perubahan daftar harga (`TBD-02` — `APPROVED — OWNER`, amendemen ADR 0002):** penambahan harga dicatat dengan `action = 'CREATE_SALE_PRICE'`; perubahan harga dicatat dengan `action = 'UPDATE_SALE_PRICE'`. Keduanya hanya menyimpan aktor (`actor_id`) dan waktu (`created_at`), dengan `old_values = NULL` dan `new_values = NULL` (tanpa riwayat harga katalog).
+3.  **Arsitektur cetak thermal (`TBD-03` — `APPROVED — OWNER`, ADR 0002):** browser print CSS 58/80 mm dan dialog cetak sistem menjadi baseline; uji perangkat fisik lintas OS tetap wajib pada `GPOS-04` sebelum klaim kompatibilitas.
+4.  **Kontrak API POS (`TBD-04` — `APPROVED — OWNER`, ADR 0002):** route, request/response, error, pagination, idempotency, dan refresh/konfirmasi harga dikunci pada `docs/pos-api-contract.md`.
 5.  **Detail sequence penjualan (`TBD-05` — `APPROVED — OWNER`):** ditetapkan menggunakan tabel `sale_daily_sequences` (`sale_date DATE PRIMARY KEY`, `last_number BIGINT NOT NULL CHECK (last_number >= 0)`) dengan padding minimal tiga digit dan bertambah panjang melewati 999.
-6.  **Audit action dan hak database (`TBD-06` — `APPROVED — OWNER` untuk Actions / `TBD` untuk DDL):** nilai `action` baru (`CREATE_SALE`, `VOID_SALE`, `UPDATE_PRICE`) serta penolakan akses Audit Log untuk `Kasir` (`TBD-07`) telah disetujui; detail `ALTER CONSTRAINT` DDL, trigger imutabilitas, index, serta privilege runtime POS difinalisasi pada `GPOS-02`.
+6.  **Audit action, DDL, dan hak database (`TBD-06` — `APPROVED — OWNER`, ADR 0002 amendment):** empat tabel POS, kalkulasi stok, trigger, guard transaksi turunan, index, action (`CREATE_SALE`, `VOID_SALE`, `CREATE_SALE_PRICE`, `UPDATE_SALE_PRICE`), dan granular privileges runtime telah disetujui untuk implementasi.
 
 ## 18. Gerbang persetujuan sebelum implementasi
 

@@ -13,8 +13,19 @@ export interface DependentTransactionGuard {
 }
 
 @Injectable()
-export class NoDependentTransactionGuard implements DependentTransactionGuard {
-  async hasDependentTransactions(): Promise<boolean> {
-    return false;
+export class DatabaseDependentTransactionGuard implements DependentTransactionGuard {
+  async hasDependentTransactions(
+    transaction: Prisma.TransactionClient,
+    batchId: string,
+  ): Promise<boolean> {
+    const [result] = await transaction.$queryRaw<
+      Array<{ has_dependent_transactions: boolean }>
+    >`
+      SELECT EXISTS (
+        SELECT 1 FROM "fish_sales" WHERE "batch_id" = ${batchId}::uuid
+      ) AS has_dependent_transactions
+    `;
+
+    return result?.has_dependent_transactions ?? false;
   }
 }

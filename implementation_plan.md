@@ -651,16 +651,16 @@ Gate dinyatakan lulus hanya jika:
 | TBD    | Status Terkini                                            | Keputusan / Sisa tindakan yang dibutuhkan                                                                                                                                                                                                                                                            |
 | ------ | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | TBD-01 | `APPROVED — OWNER`                                        | Ditetapkan batas harga Rp 1 s.d. Rp 10.000.000 per ekor (`BIGINT`, Rupiah bulat tanpa desimal).                                                                                                                                                                                                      |
-| TBD-02 | `APPROVED — OWNER`                                        | Audit perubahan harga (`action = 'UPDATE_PRICE'`) hanya mencatat aktor dan waktu (`old_values = NULL`, `new_values = NULL`).                                                                                                                                                                         |
-| TBD-03 | `TBD — NEEDS DECISION`                                    | Pendekatan ESC/POS Bluetooth (mobile) & Web USB/Browser Print (PC/laptop) disetujui, namun merek/model printer, solusi bridge Bluetooth iOS/iPhone, dan uji perangkat aktual tetap wajib diselesaikan di `GPOS-04`.                                                                                  |
-| TBD-04 | `TBD — NEEDS DECISION`                                    | Request/response body, error code (termasuk rollback konkurensi/harga berubah dan kewajiban `Idempotency-Key` baru), serta strategi refresh dan konfirmasi harga API POS wajib dikunci di `GPOS-03`. Pagination/filter dasar mengikuti ADR 0001, tetapi envelope final POS tetap bagian kontrak API. |
+| TBD-02 | `APPROVED — OWNER` (ADR 0002 amendment)                   | Tambah harga memakai `CREATE_SALE_PRICE`; ubah harga memakai `UPDATE_SALE_PRICE`. Keduanya hanya mencatat aktor/waktu dengan `old_values = NULL`, `new_values = NULL`.                                                                                                                              |
+| TBD-03 | `APPROVED — OWNER` (ADR 0002)                             | Browser print CSS 58/80 mm dan dialog cetak sistem menjadi baseline; GPOS-04 tetap menguji perangkat/printer fisik sebelum klaim kompatibilitas.                                                                                                                                                |
+| TBD-04 | `APPROVED — OWNER` (ADR 0002)                             | Kontrak final tercatat pada `docs/pos-api-contract.md`; perubahan memerlukan keputusan owner baru.                                                                                                                                                                                                 |
 | TBD-05 | `APPROVED — OWNER`                                        | Menggunakan tabel `sale_daily_sequences` (`sale_date DATE PRIMARY KEY`, `last_number BIGINT`) tanpa batas 999.                                                                                                                                                                                       |
-| TBD-06 | `APPROVED — OWNER` _(Actions)_ / `TBD` _(DDL/Privileges)_ | Nilai `action` (`CREATE_SALE`, `VOID_SALE`, `UPDATE_PRICE`) disetujui; `ALTER CONSTRAINT` DDL, trigger imutabilitas, index, dan `GRANT`/`REVOKE` runtime POS dikunci di `GPOS-02`.                                                                                                                   |
+| TBD-06 | `APPROVED — OWNER` (ADR 0002)                             | Skema 4 tabel, stok terhitung, trigger, guard receiving VOID, audit action, index, dan granular privileges disetujui; belum diterapkan.                                                                                                                                                            |
 | TBD-07 | `APPROVED — OWNER`                                        | Role `Kasir` dilarang (`Forbidden`) mengakses data maupun halaman Audit Log.                                                                                                                                                                                                                         |
 | TBD-08 | `PARTIALLY RESOLVED — OWNER` (ADR 0001)                   | Provisioning awal `Owner` lokal melalui CLI idempoten dari `.env` telah disetujui. Deaktivasi akun, perubahan role, reset kata sandi, dan administrasi pengguna tetap TBD.                                                                                                                           |
 | TBD-09 | `APPROVED — OWNER` (ADR 0001)                             | Default `page=1`, `limit=20`, maksimum `100`; rentang tanggal ISO 8601 pada timestamp utama, status hanya enum resmi, urutan default `DESC`. Pencarian dan pilihan sort tambahan belum disetujui.                                                                                                    |
 
-**Deliverable:** daftar keputusan yang seluruh barisnya memiliki status `APPROVED`, `REJECTED`, atau `DEFERRED` dengan dampak yang jelas. Baris yang memblokir desain tidak boleh dibiarkan kosong.
+**Deliverable:** [ADR 0002](docs/adr/0002-pos-gate-architecture.md) dan [kontrak API POS](docs/pos-api-contract.md) menjadi catatan normatif keputusan yang disetujui. GPOS-04 tetap membuktikan kompatibilitas perangkat secara fisik. Keputusan yang telah disetujui bukan izin menjalankan migrasi atau membuat kode di luar task berikutnya.
 
 ## Task GPOS-02 — Finalisasi data model POS
 
@@ -674,7 +674,7 @@ Gate dinyatakan lulus hanya jika:
 - Pastikan transaksi penjualan serta VOID bersifat append-only.
 - Pastikan VOID satu kali per transaksi dan mengembalikan stok.
 
-**Deliverable:** database design POS yang disetujui.
+**Deliverable:** review kesiapan desain POS untuk diturunkan ke migrasi pada Phase 7; tidak menjalankan migrasi sebagai bagian dari Gate decision task.
 
 ## Task GPOS-03 — Finalisasi API Contract POS
 
@@ -685,7 +685,7 @@ Gate dinyatakan lulus hanya jika:
 - Tentukan perilaku perubahan harga ketika kasir sedang menyelesaikan transaksi.
 - Pastikan `created_by` ditentukan dari JWT.
 
-**Deliverable:** API Contract POS final dan dapat diturunkan menjadi test case.
+**Deliverable:** API Contract POS final dan test matrix; kontraknya telah diterbitkan pada `docs/pos-api-contract.md`, implementasi endpoint tetap di Phase 7.
 
 ## Task GPOS-04 — Proof-of-concept printer dan persetujuan desain UI POS
 

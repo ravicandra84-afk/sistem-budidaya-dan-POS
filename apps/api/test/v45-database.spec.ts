@@ -24,6 +24,25 @@ databaseSuite("V4.5 PostgreSQL guards", () => {
     await prisma.$disconnect();
   });
 
+  it("accepts the Kasir role in the database role constraint", async () => {
+    const userId = randomUUID();
+
+    await expect(
+      prisma.$transaction(async (transaction) => {
+        await transaction.user.create({
+          data: {
+            id: userId,
+            name: "P7-01 database test",
+            email: `${userId}@pfi.test`,
+            passwordHash: "test-hash",
+            role: "Kasir",
+          },
+        });
+        throw new Error(rollbackFixtureMessage);
+      }),
+    ).rejects.toThrow(rollbackFixtureMessage);
+  });
+
   it("rejects a batch that has no receipt when the transaction commits", async () => {
     const userId = randomUUID();
 

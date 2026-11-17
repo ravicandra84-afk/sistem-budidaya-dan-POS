@@ -150,7 +150,7 @@ Arsitektur database memisahkan dua peran koneksi PostgreSQL:
 2. **App Runtime Role (DML Granular):** Digunakan oleh layanan backend saat runtime dengan hak akses terbatas:
    - **Tabel Append-Only (`incoming_fish`, `incoming_fish_voids`, `audit_logs`, serta perluasan POS `fish_sales`, `fish_sale_voids`):** Hanya memiliki hak `SELECT` dan `INSERT`. Hak `UPDATE` dan `DELETE` dicabut secara mutlak.
    - **Proteksi Trigger:** Trigger `BEFORE UPDATE OR DELETE` dipasang pada seluruh tabel append-only untuk melemparkan `EXCEPTION` apabila ada upaya modifikasi atau penghapusan baris historis dari jalur koneksi mana pun.
-   - **Tabel Sequence, Katalog Harga & Status Terkendali:** Sesuai keputusan eksplisit ADR 0001 untuk memenuhi alur atomik V4.5, `batch_daily_sequences` memiliki `SELECT`, `INSERT`, dan `UPDATE` terbatas pada kolom `last_number`; `batches` memiliki `SELECT`, `INSERT`, dan `UPDATE` terbatas pada kolom `status`. `idempotency_keys` hanya dapat di-`UPDATE` pada `status`, `response_status`, `response_body`, dan `completed_at`. Hak POS (`sale_daily_sequences`, `fish_sale_prices`, dan tabel transaksi POS) tetap tidak diterapkan sebelum Gate POS.
+   - **Tabel Sequence, Katalog Harga & Status Terkendali:** Sesuai keputusan eksplisit ADR 0001, `batch_daily_sequences` memiliki `SELECT`, `INSERT`, dan `UPDATE` terbatas pada kolom `last_number`; `batches` memiliki `SELECT`, `INSERT`, dan `UPDATE` terbatas pada kolom `status`. `idempotency_keys` hanya dapat di-`UPDATE` pada `status`, `response_status`, `response_body`, dan `completed_at`. Hak POS telah dikunci dalam ADR 0002; grants POS belum diterapkan dan hanya dibuat melalui task implementasi database yang disetujui.
 
 ---
 
@@ -381,16 +381,16 @@ Entitas induk kelompok ikan homogen (1 spesies, 1 ukuran).
 - `id`: `UUID PRIMARY KEY DEFAULT gen_random_uuid()`
 - `request_id`: `VARCHAR(255) NOT NULL`
 - `actor_id`: `UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT`
-- `action`: `VARCHAR(50) NOT NULL` — pada migrasi Fase 7, constraint `CHECK` V4.5 diperbarui melalui `ALTER TABLE audit_logs` agar mencakup nilai V4.5 (`'CREATE_ENTRY'`, `'VOID_ENTRY'`) dan nilai baru POS (`'CREATE_SALE'`, `'VOID_SALE'`, `'UPDATE_PRICE'`) (`APPROVED — OWNER`, `TBD-06`).
+- `action`: `VARCHAR(50) NOT NULL` — pada migrasi Fase 7, constraint `CHECK` V4.5 diperbarui secara additive agar mencakup nilai V4.5 (`'CREATE_ENTRY'`, `'VOID_ENTRY'`) dan nilai POS (`'CREATE_SALE'`, `'VOID_SALE'`, `'CREATE_SALE_PRICE'`, `'UPDATE_SALE_PRICE'`) (`APPROVED — OWNER`, ADR 0002).
 - `entity_type`: `VARCHAR(50) NOT NULL`
 - `entity_id`: `UUID NOT NULL`
-- `old_values`: `JSONB NULLABLE` _(Untuk `UPDATE_PRICE`, dibiarkan `NULL` sesuai keputusan audit ringkas `TBD-02`)_
-- `new_values`: `JSONB NULLABLE` _(Untuk `UPDATE_PRICE`, dibiarkan `NULL` sesuai keputusan audit ringkas `TBD-02`)_
+- `old_values`: `JSONB NULLABLE` _(Untuk `CREATE_SALE_PRICE` dan `UPDATE_SALE_PRICE`, dibiarkan `NULL` sesuai keputusan audit ringkas `TBD-02`)_
+- `new_values`: `JSONB NULLABLE` _(Untuk `CREATE_SALE_PRICE` dan `UPDATE_SALE_PRICE`, dibiarkan `NULL` sesuai keputusan audit ringkas `TBD-02`)_
 - `reason`: `TEXT NULLABLE`
 - `ip_address`: `VARCHAR(45) NULLABLE`
 - `created_at`: `TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP`
 
-### 4.3 Skema Tabel Modul POS (Keputusan Pemilik Produk + Rancangan Teknis)
+### 4.3 Skema Tabel Modul POS (`APPROVED — OWNER`, ADR 0002; belum diimplementasikan)
 
 #### 9. `sale_daily_sequences` (`APPROVED — OWNER` — `TBD-05`)
 
@@ -400,7 +400,7 @@ Mengelola penomoran transaksi penjualan harian global tanpa batas maksimum $999$
 - `last_number`: `BIGINT NOT NULL CHECK (last_number >= 0)`
 - **Format Nomor Transaksi:** `PFI-SAL-YYYYMMDD-XXX`, dengan padding minimal 3 digit untuk angka $1\text{--}999$ (`001`--`999`) dan otomatis melebar untuk angka $\ge 1000$ (`1000`, `1001`, dst.).
 
-#### 10. `fish_sale_prices` (`APPROVED — OWNER` untuk `TBD-01` & `TBD-02` | `PROPOSED — TECHNICAL` untuk DDL final)
+#### 10. `fish_sale_prices` (`APPROVED — OWNER`, ADR 0002)
 
 Menyimpan satu harga jual aktif per kombinasi spesies dan ukuran ikan (mutable/dapat ditimpa oleh `Owner` dan `Admin Operasional`, tanpa riwayat harga katalog).
 
@@ -413,9 +413,9 @@ Menyimpan satu harga jual aktif per kombinasi spesies dan ukuran ikan (mutable/d
 - `updated_by`: `UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT`
 - `updated_at`: `TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP`
 - **Constraint Unik:** `UNIQUE (species_id, fish_size)`
-- **Kebijakan Audit (`TBD-02` — `APPROVED — OWNER`):** Setiap penambahan/perubahan harga dicatat ke `audit_logs` dengan `action = 'UPDATE_PRICE'` yang hanya menyimpan aktor (`actor_id`) dan waktu (`created_at`), tanpa menyimpan `old_values` maupun `new_values`.
+- **Kebijakan Audit (`TBD-02` — `APPROVED — OWNER`, amendemen ADR 0002):** Penambahan harga dicatat dengan `action = 'CREATE_SALE_PRICE'`; perubahan harga dengan `action = 'UPDATE_SALE_PRICE'`. Keduanya hanya menyimpan aktor (`actor_id`) dan waktu (`created_at`), tanpa `old_values` maupun `new_values`.
 
-#### 11. `fish_sales` (`PROPOSED — TECHNICAL` — Append-Only)
+#### 11. `fish_sales` (`APPROVED — OWNER`, ADR 0002 — Append-Only)
 
 Menyimpan transaksi penjualan satu batch secara lunas beserta _snapshot_ harga pada saat transaksi terjadi.
 
@@ -431,7 +431,7 @@ Menyimpan transaksi penjualan satu batch secara lunas beserta _snapshot_ harga p
 - `created_by`: `UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT`
 - `created_at`: `TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP`
 
-#### 12. `fish_sale_voids` (`PROPOSED — TECHNICAL` — Append-Only)
+#### 12. `fish_sale_voids` (`APPROVED — OWNER`, ADR 0002 — Append-Only)
 
 Menyimpan pembatalan satu transaksi penjualan secara utuh tanpa mengubah atau menghapus baris pada `fish_sales`.
 
@@ -450,6 +450,8 @@ $$\text{Stok Batch} = \text{Total Penerimaan Valid} - \text{Total Penjualan Vali
 - **Total Penerimaan Valid:** Nilai `incoming_fish.quantity` untuk batch yang tidak memiliki baris pada `incoming_fish_voids`.
 - **Total Penjualan Valid:** $\sum \text{fish\_sales.quantity}$ pada batch terkait yang `sale_id`-nya tidak tercatat pada `fish_sale_voids`.
 - **Total Kematian Valid:** Bernilai $0$ pada cakupan MVP saat ini karena modul pencatatan kematian berstatus `OUT OF SCOPE`, namun service kalkulasi stok didesain modular agar siap menyertakan pengurangan kematian valid pada fase berikutnya.
+
+`calculate_batch_stock(UUID)` diperluas untuk memasukkan sales yang belum di-VOID sesuai ADR 0002. Pengecekan checkout dan dependent transaction guard receiving VOID memakai row lock batch yang sama. Implementasi fungsi/trigger/grant tetap menunggu task database POS.
 
 ```mermaid
 stateDiagram-v2
@@ -489,7 +491,7 @@ stateDiagram-v2
 6. **Insert Reversal & Update Status:** Simpan baris baru ke `incoming_fish_voids` (tanpa mengubah/menghapus `incoming_fish`), ubah `batches.status = 'voided'`, dan tulis `audit_logs` (`action = 'VOID_ENTRY'`).
 7. **Finalize Idempotency & Commit:** Selesaikan `idempotency_keys` dan `COMMIT` transaksi.
 
-### 5.3 Alur Transaksi Penjualan Kasir / POS (`LOCKED — BUSINESS` | Kontrak API `TBD-04`)
+### 5.3 Alur Transaksi Penjualan Kasir / POS (`LOCKED — BUSINESS` | Kontrak API `APPROVED — OWNER`, ADR 0002)
 
 ```mermaid
 sequenceDiagram
@@ -507,7 +509,7 @@ sequenceDiagram
     Kasir->>UI: Input Quantity (Ekor) & Konfirmasi Harga
     Note over UI: Jika qty > stok, batasi ke stok & minta konfirmasi.\nJika harga berubah, minta konfirmasi ulang.
     Kasir->>UI: Pilih Pembayaran Lunas (Tunai >= Total / Konfirmasi Transfer)
-    UI->>API: Submit Penjualan + JWT + Idempotency-Key (UUIDv4)
+    UI->>API: POST /api/v1/pos/sales + JWT + Idempotency-Key (UUIDv4)
     API->>DB: BEGIN TRANSACTION + Idempotency Lock
     API->>DB: SELECT * FROM batches WHERE id = :batch_id FOR UPDATE
     API->>DB: Validasi Ulang Status 'active', Stok >= qty, Harga Terkini, & Pembayaran
@@ -534,7 +536,7 @@ sequenceDiagram
   5. Backend menulis `audit_logs` dengan `action = 'VOID_SALE'`, menyelesaikan idempotency, dan melakukan `COMMIT`.
 - **Pengelolaan Harga (`APPROVED — OWNER` untuk `TBD-01` & `TBD-02`):**
   1. Hanya `Owner` dan `Admin Operasional` yang dapat menambah atau memperbarui harga per `(species_id, fish_size)` dengan nilai Rupiah bulat $1 \le \text{price\_per\_fish} \le 10.000.000$.
-  2. Backend memperbarui `fish_sale_prices` dan menulis `audit_logs` dengan `action = 'UPDATE_PRICE'` yang hanya mencatat `actor_id` dan `created_at` (`old_values = NULL`, `new_values = NULL`).
+  2. Backend menambah/memperbarui `fish_sale_prices` dan menulis `audit_logs` dengan `action = 'CREATE_SALE_PRICE'`/`'UPDATE_SALE_PRICE'` yang hanya mencatat `actor_id` dan `created_at` (`old_values = NULL`, `new_values = NULL`).
   3. Perubahan harga tidak pernah memengaruhi kolom `unit_price` maupun `total_amount` pada transaksi lama di `fish_sales`.
 
 ---
@@ -549,25 +551,25 @@ sequenceDiagram
 | `POST` | `/api/v1/fish-entries/{batch_id}/void` | `Admin Operasional`                    | Wajib ($\text{UUIDv4}$) | Membatalkan penerimaan dengan alasan wajib jika tanpa transaksi turunan (`200 OK`). |
 
 - **Kode Error Standar V4.5:** `400 INVALID_PAYLOAD`, `400 INVALID_IDEMPOTENCY_KEY`, `401 UNAUTHORIZED`, `403 FORBIDDEN`, `404 BATCH_NOT_FOUND`, `409 IDEMPOTENCY_MISMATCH`, `409 BATCH_NOT_ACTIVE`, `409 HAS_DEPENDENT_TRANSACTIONS`, `422 SPECIES_NOT_ACTIVE`, `422 INVALID_ENTRY_DATE`, `422 BATCH_SEQUENCE_EXHAUSTED`, `429 RATE_LIMIT_EXCEEDED`, `500 INTERNAL_SERVER_ERROR`, `503 DATABASE_LOCK_TIMEOUT`, `503 DATABASE_UNAVAILABLE`.
-- **Catatan Perilaku Idempotency & Konkurensi POS (`TBD-04`):** Karena verifikasi stok terkini dan kecocokan harga terbaru (`unit_price` klien vs `fish_sale_prices`) pada `POST /api/v1/fish-sales` dilakukan di dalam transaksi database setelah `SELECT ... FOR UPDATE`, penolakan konkurensi (misalnya `409 PRICE_CHANGED` atau `409 INSUFFICIENT_STOCK`) akan me-`ROLLBACK` transaksi termasuk baris `idempotency_keys`. Oleh karena itu, klien wajib membangkitkan `Idempotency-Key` UUIDv4 baru setelah kasir menyetujui harga terbaru atau penyesuaian jumlah.
+- **Catatan Idempotency & Konkurensi POS (ADR 0002):** Verifikasi stok dan harga dilakukan setelah `SELECT ... FOR UPDATE`. Konflik `PRICE_CHANGED` atau `INSUFFICIENT_STOCK` me-rollback transaksi termasuk baris idempotency; setelah nilai terbaru disetujui, klien memakai key UUIDv4 baru. Detail kontrak ada di `docs/pos-api-contract.md`.
 - **Endpoint Baca Pendukung PRD (`PG-01`, `PG-02`, `PG-04`, `PG-06`):** Endpoint autentikasi login, daftar/detail penerimaan & batch, serta pembacaan `audit_logs` (khusus `Owner`, `Admin Operasional`, `Kepala Budidaya`) mengikuti pola REST JSON standar di bawah `/api/v1`.
 
-### 6.2 Kandidat Endpoint Modul POS (`PROPOSED — TECHNICAL` | `TBD-04`)
+### 6.2 Endpoint Modul POS (`APPROVED — OWNER`, ADR 0002)
 
-Daftar endpoint berikut merupakan peta layanan konseptual untuk modul POS. Skema _request/response body_, aturan pagination, dan daftar _error code_ spesifik kasir ditandai sebagai **`TBD-04`** untuk dikunci sebelum tahap coding POS dimulai:
+Kontrak request/response, pagination, RBAC, idempotency, serta error normatif dicatat dalam [docs/pos-api-contract.md](docs/pos-api-contract.md). Tabel berikut merangkum route yang telah disetujui; implementasinya tetap mengikuti urutan task dan gate proyek.
 
-| Method  | Kandidat Endpoint                      | Hak Akses                             | Fungsi Konseptual                                                                                                 |
-| ------- | -------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `GET`   | `/api/v1/pos/batches`                  | `Owner`, `Admin Operasional`, `Kasir` | Mengambil daftar batch `active` dengan stok valid $> 0$ beserta harga jual jika tersedia.                         |
-| `GET`   | `/api/v1/pos/batches/{batch_id}`       | `Owner`, `Admin Operasional`, `Kasir` | Memuat ulang stok terkini dan harga terbaru batch sebelum konfirmasi transaksi.                                   |
-| `GET`   | `/api/v1/pos/prices`                   | `Owner`, `Admin Operasional`, `Kasir` | Membaca daftar harga aktif per spesies dan ukuran.                                                                |
-| `POST`  | `/api/v1/pos/prices`                   | `Owner`, `Admin Operasional`          | Menambahkan harga baru untuk kombinasi `(species_id, fish_size)` yang belum ada (`Idempotency-Key` UUIDv4 wajib). |
-| `PATCH` | `/api/v1/pos/prices/{price_id}`        | `Owner`, `Admin Operasional`          | Mengubah harga aktif yang sudah ada dan mencatat audit `UPDATE_PRICE` (`Idempotency-Key` UUIDv4 wajib).           |
-| `POST`  | `/api/v1/fish-sales`                   | `Owner`, `Admin Operasional`, `Kasir` | Menyimpan transaksi penjualan lunas secara atomik (`Idempotency-Key` wajib).                                      |
-| `GET`   | `/api/v1/fish-sales`                   | `Owner`, `Admin Operasional`, `Kasir` | Menampilkan seluruh histori transaksi penjualan.                                                                  |
-| `GET`   | `/api/v1/fish-sales/{sale_id}`         | `Owner`, `Admin Operasional`, `Kasir` | Menampilkan detail transaksi penjualan beserta status aktif/VOID.                                                 |
-| `POST`  | `/api/v1/fish-sales/{sale_id}/void`    | `Owner`, `Admin Operasional`, `Kasir` | Membatalkan seluruh transaksi penjualan (`Idempotency-Key` wajib, tanpa alasan wajib).                            |
-| `GET`   | `/api/v1/fish-sales/{sale_id}/receipt` | Pembuat Transaksi (`created_by`)      | Mengambil data struk untuk cetak ulang (ditolak jika bukan pembuat atau transaksi sudah VOID).                    |
+| Method  | Kandidat Endpoint                     | Hak Akses                             | Fungsi Konseptual                                                                                                 |
+| ------- | ------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `GET`   | `/api/v1/pos/batches`                 | `Owner`, `Admin Operasional`, `Kasir` | Mengambil daftar batch `active` dengan stok valid $> 0$ beserta harga jual jika tersedia.                         |
+| `GET`   | `/api/v1/pos/batches/{batch_id}`      | `Owner`, `Admin Operasional`, `Kasir` | Memuat ulang stok terkini dan harga terbaru batch sebelum konfirmasi transaksi.                                   |
+| `GET`   | `/api/v1/pos/prices`                  | `Owner`, `Admin Operasional`, `Kasir` | Membaca daftar harga aktif per spesies dan ukuran.                                                                |
+| `POST`  | `/api/v1/pos/prices`                  | `Owner`, `Admin Operasional`          | Menambahkan harga baru untuk kombinasi `(species_id, fish_size)` yang belum ada (`Idempotency-Key` UUIDv4 wajib). |
+| `PATCH` | `/api/v1/pos/prices/{price_id}`       | `Owner`, `Admin Operasional`          | Mengubah harga aktif yang sudah ada dan mencatat audit `UPDATE_SALE_PRICE` (`Idempotency-Key` UUIDv4 wajib).      |
+| `POST`  | `/api/v1/pos/sales`                   | `Owner`, `Admin Operasional`, `Kasir` | Menyimpan transaksi penjualan lunas secara atomik (`Idempotency-Key` wajib).                                      |
+| `GET`   | `/api/v1/pos/sales`                   | `Owner`, `Admin Operasional`, `Kasir` | Menampilkan histori dengan pagination/filter ADR 0001.                                                            |
+| `GET`   | `/api/v1/pos/sales/{sale_id}`         | `Owner`, `Admin Operasional`, `Kasir` | Menampilkan detail transaksi penjualan beserta status aktif/VOID.                                                 |
+| `POST`  | `/api/v1/pos/sales/{sale_id}/void`    | `Owner`, `Admin Operasional`, `Kasir` | Membatalkan seluruh transaksi penjualan (`Idempotency-Key` wajib, tanpa alasan wajib).                            |
+| `GET`   | `/api/v1/pos/sales/{sale_id}/receipt` | Pembuat Transaksi (`created_by`)      | Mengambil data struk untuk cetak ulang (ditolak jika bukan pembuat atau transaksi sudah VOID).                    |
 
 ---
 
@@ -579,17 +581,15 @@ Daftar endpoint berikut merupakan peta layanan konseptual untuk modul POS. Skema
 - Sistem PFI beroperasi secara mandiri tanpa ketergantungan pada API pihak ketiga seperti _payment gateway_, sistem akuntansi/ERP, layanan CRM, maupun layanan analitik eksternal.
 - Pembayaran transfer pada kasir dicatat melalui mekanisme konfirmasi manual oleh kasir bahwa dana telah diterima tanpa integrasi mutasi bank otomatis maupun input nomor referensi wajib.
 
-### 7.2 Arsitektur Pencetakan Struk Thermal (`TBD-03`)
+### 7.2 Arsitektur Pencetakan Struk Thermal (`APPROVED — OWNER`, ADR 0002)
 
 Pencetakan struk dijalankan sepenuhnya pada **sisi klien (Client-Side Printing)** dengan prinsip **Decoupled Commit-and-Print**:
 
 1. **Pemisahan Status Transaksi dan Printer (`FR-PRINT-04`):**
    - Transaksi penjualan di-`COMMIT` ke PostgreSQL terlebih dahulu sebelum perintah cetak dijalankan.
-   - Kegagalan koneksi printer, kertas habis, atau _timeout_ Bluetooth/USB **tidak pernah** membatalkan transaksi penjualan dan tidak boleh memicu pengiriman ulang request `POST /api/v1/fish-sales`.
-2. **Jalur Koneksi Multi-Platform (`APPROVED — OWNER`):**
-   - **Perangkat Mobile (Android & iPhone):** Menggunakan protokol standar **ESC/POS melalui koneksi Bluetooth** untuk berkomunikasi dengan printer thermal portable 58 mm / 80 mm.
-   - **Perangkat Desktop (PC & Laptop):** Menggunakan **Web USB** atau mekanisme **Cetak Browser Web standar (_Web Print_)** dengan tata letak CSS thermal 58 mm dan 80 mm.
-   - **Batasan Teknis iOS/iPhone & `TBD-03`:** Browser web standar pada iOS/iPhone (Safari maupun browser berbasis WebKit) **tidak mendukung _Web Bluetooth API_ secara bawaan**. Oleh karena itu, dukungan cetak Bluetooth langsung dari perangkat iPhone memerlukan aplikasi _native wrapper_ / _print bridge_ lokal atau jalur cetak alternatif yang wajib diverifikasi secara fisik lintas OS (Android, iOS/iPhone, Windows/macOS/Linux) pada `Task GPOS-04` & `P9-03`.
+   - Kegagalan koneksi printer atau kertas habis **tidak pernah** membatalkan transaksi penjualan dan tidak boleh memicu pengiriman ulang request `POST /api/v1/pos/sales`.
+2. **Jalur Baseline Multi-Platform (`APPROVED — OWNER`):** Browser print dengan layout CSS untuk lebar 58 mm dan 80 mm menjadi baseline melalui dialog cetak sistem tanpa driver/protokol printer khusus aplikasi. Target desktop mencakup Linux Pop!\_OS dan Windows; OS tetap mungkin memerlukan driver atau dukungan printer native sehingga ini bukan jaminan zero-driver universal. Perangkat mobile/tablet menggunakan dialog cetak sistem apabila didukung kombinasi OS, browser, dan printer. Direct ESC/POS Bluetooth, WebUSB, Web Serial, native wrapper, dan print bridge tidak termasuk baseline ADR 0002.
+   - **Verifikasi fisik GPOS-04:** Merek/model printer dan kombinasi perangkat tetap harus diuji sebelum dukungan aktual diklaim. Keputusan arsitektur browser print telah disetujui; kompatibilitas perangkat tertentu belum diverifikasi.
 3. **Konten Struk & Otorisasi Cetak Ulang (`FR-PRINT-01` s.d. `FR-PRINT-05`):**
    - Struk **hanya** mencetak 9 elemen: Nama Perusahaan (`Pisciculture Farm Indonesia`), Tanggal & Waktu, Spesies Ikan, Ukuran Ikan, Jumlah (`ekor`), Harga per Ekor, Total Pembayaran, Metode Pembayaran (`Tunai` / `Transfer`), dan Nama Kasir.
    - **Dilarang mencetak:** Nomor penjualan internal (`PFI-SAL-...`), kode batch (`PFI-BCH-...`), data pelanggan, referensi transfer, maupun status/alasan VOID.
@@ -609,15 +609,15 @@ Pencetakan struk dijalankan sepenuhnya pada **sisi klien (Client-Side Printing)*
 
 Tabel berikut merangkum seluruh item `TBD` dari PRD/Blueprint beserta status terkininya setelah keputusan arsitektur pemilik produk:
 
-| ID       | Topik                                  | Status Terkini                                              | Keputusan / Tindakan yang Diperlukan                                                                                                                                                                                                   |
-| -------- | -------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TBD-01` | Batas maksimum harga per ekor          | `APPROVED — OWNER`                                          | Ditetapkan minimum $\text{Rp } 1$ dan maksimum $\text{Rp } 10.000.000$ per ekor menggunakan `BIGINT` (bilangan bulat Rupiah tanpa desimal).                                                                                            |
-| `TBD-02` | Audit perubahan daftar harga           | `APPROVED — OWNER`                                          | Dicatat ke `audit_logs` (`action = 'UPDATE_PRICE'`) hanya dengan aktor dan waktu (`old_values` & `new_values` kosong).                                                                                                                 |
-| `TBD-03` | Spesifikasi printer thermal            | `APPROVED — OWNER` _(Pendekatan)_ / `TBD` _(Uji Perangkat)_ | Pendekatan ESC/POS Bluetooth (mobile) & Web USB/Browser Print (PC/laptop) disetujui; merek tidak dikunci agar universal, namun uji fisik lintas perangkat tetap wajib pada `GPOS-04`.                                                  |
-| `TBD-04` | Kontrak API POS final                  | `TBD — NEEDS DECISION`                                      | Skema request/response body, kode error spesifik POS, dan konfirmasi harga tetap menunggu Gate POS. Default query pagination/filter dasar mengikuti keputusan ADR 0001; detail envelope API POS tetap menunggu kontrak final.          |
-| `TBD-05` | Sequence penjualan harian              | `APPROVED — OWNER`                                          | Tabel `sale_daily_sequences` dengan tipe `BIGINT` disetujui sebagai desain final tanpa batas $999$.                                                                                                                                    |
-| `TBD-06` | Audit action & privilege POS           | `APPROVED — OWNER` _(Actions)_ / `TBD` _(DDL/Privileges)_   | Nilai `action` baru (`CREATE_SALE`, `VOID_SALE`, `UPDATE_PRICE`) disetujui; detail trigger dan `GRANT`/`REVOKE` runtime POS dikunci pada `GPOS-02`.                                                                                    |
-| `TBD-07` | Hak Audit Log untuk Kasir              | `APPROVED — OWNER`                                          | Role `Kasir` dilarang (`Forbidden`) mengakses data maupun halaman Audit Log.                                                                                                                                                           |
-| `TBD-08` | Pengelolaan & provisioning akun        | `PARTIALLY RESOLVED — OWNER` (ADR 0001)                     | Akun awal `Owner` lokal diprovision melalui CLI idempoten dari `.env`, tanpa registrasi publik dan tanpa mengubah akun yang sudah ada. Deaktivasi, perubahan role, reset password, dan administrasi akun tetap `TBD — NEEDS DECISION`. |
-| `TBD-09` | Pagination & filter daftar             | `APPROVED — OWNER` (ADR 0001)                               | `page=1`, `limit=20`, maksimum `100`; filter `startDate`/`endDate` ISO 8601 pada timestamp utama dan `status` hanya untuk enum resmi; urutan terbaru dahulu (`DESC`). Search dan arbitrary sort tidak termasuk keputusan ini.          |
-| `TBD-09` | Filter, pencarian, & pagination daftar | `TBD — NEEDS DECISION`                                      | Parameter filter, sorting, dan pagination untuk daftar batch dan daftar penjualan perlu dikunci sebelum implementasi endpoint daftar.                                                                                                  |
+| ID       | Topik                                  | Status Terkini                          | Keputusan / Tindakan yang Diperlukan                                                                                                                                                                                                   |
+| -------- | -------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TBD-01` | Batas maksimum harga per ekor          | `APPROVED — OWNER`                      | Ditetapkan minimum $\text{Rp } 1$ dan maksimum $\text{Rp } 10.000.000$ per ekor menggunakan `BIGINT` (bilangan bulat Rupiah tanpa desimal).                                                                                            |
+| `TBD-02` | Audit perubahan daftar harga           | `APPROVED — OWNER`                      | Tambah harga memakai `CREATE_SALE_PRICE`; ubah harga memakai `UPDATE_SALE_PRICE`. Keduanya hanya mencatat aktor/waktu (`old_values` & `new_values` kosong), sesuai amendemen ADR 0002.                                                 |
+| `TBD-03` | Arsitektur cetak thermal               | `APPROVED — OWNER` (ADR 0002)           | Browser print CSS 58/80 mm dan dialog sistem menjadi baseline; GPOS-04 tetap wajib untuk menguji printer/perangkat fisik sebelum klaim kompatibilitas.                                                                                 |
+| `TBD-04` | Kontrak API POS final                  | `APPROVED — OWNER` (ADR 0002)           | Route `/api/v1/pos/*`, envelope, payload, error, RBAC, idempotency, dan list contract normatif ada di `docs/pos-api-contract.md`.                                                                                                      |
+| `TBD-05` | Sequence penjualan harian              | `APPROVED — OWNER`                      | Tabel `sale_daily_sequences` dengan tipe `BIGINT` disetujui sebagai desain final tanpa batas $999$.                                                                                                                                    |
+| `TBD-06` | Audit action & privilege POS           | `APPROVED — OWNER` (ADR 0002)           | Empat tabel POS, computed stock, trigger, dependent transaction guard, action audit, index, dan granular runtime privileges dikunci untuk implementasi sesuai ADR 0002.                                                                |
+| `TBD-07` | Hak Audit Log untuk Kasir              | `APPROVED — OWNER`                      | Role `Kasir` dilarang (`Forbidden`) mengakses data maupun halaman Audit Log.                                                                                                                                                           |
+| `TBD-08` | Pengelolaan & provisioning akun        | `PARTIALLY RESOLVED — OWNER` (ADR 0001) | Akun awal `Owner` lokal diprovision melalui CLI idempoten dari `.env`, tanpa registrasi publik dan tanpa mengubah akun yang sudah ada. Deaktivasi, perubahan role, reset password, dan administrasi akun tetap `TBD — NEEDS DECISION`. |
+| `TBD-09` | Pagination & filter daftar             | `APPROVED — OWNER` (ADR 0001)           | `page=1`, `limit=20`, maksimum `100`; filter `startDate`/`endDate` ISO 8601 pada timestamp utama dan `status` hanya untuk enum resmi; urutan terbaru dahulu (`DESC`). Search dan arbitrary sort tidak termasuk keputusan ini.          |
+| `TBD-09` | Filter, pencarian, & pagination daftar | `TBD — NEEDS DECISION`                  | Parameter filter, sorting, dan pagination untuk daftar batch dan daftar penjualan perlu dikunci sebelum implementasi endpoint daftar.                                                                                                  |

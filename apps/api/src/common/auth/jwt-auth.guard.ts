@@ -4,7 +4,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from "@nestjs/common";
-import { UserRole } from "@pfi/shared";
+import { USER_ROLES, UserRole } from "@pfi/shared";
 import type { Request } from "express";
 import * as jwt from "jsonwebtoken";
 import { loadApiEnvironment } from "../../config/env";
@@ -60,10 +60,7 @@ export class JwtAuthGuard implements CanActivate {
       select: { id: true, name: true, email: true, role: true, isActive: true },
     });
 
-    if (
-      !user?.isActive ||
-      !["Owner", "Admin Operasional", "Kepala Budidaya"].includes(user.role)
-    ) {
+    if (!user?.isActive || !USER_ROLES.includes(user.role as UserRole)) {
       throw new ApiException(
         401,
         "UNAUTHORIZED",

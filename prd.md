@@ -493,14 +493,16 @@ Memberikan visibilitas jejak tindakan untuk role yang ditetapkan V4.5.
 ### Perilaku
 
 - Audit log hanya dapat dibaca melalui UI; role `Kasir` ditolak (`403 FORBIDDEN`) mengakses halaman maupun API Audit Log (`APPROVED — OWNER`, `TBD-07`).
-- Role `Kepala Budidaya` hanya dapat melihat entri audit modul Penerimaan/Batch (`CREATE_ENTRY`, `VOID_ENTRY`) dan tidak melihat entri audit transaksi penjualan POS (`CREATE_SALE`, `VOID_SALE`, `UPDATE_PRICE`).
+- Role `Kepala Budidaya` hanya dapat melihat entri audit modul Penerimaan/Batch (`CREATE_ENTRY`, `VOID_ENTRY`) dan tidak melihat entri audit POS (`CREATE_SALE`, `VOID_SALE`, `CREATE_SALE_PRICE`, `UPDATE_SALE_PRICE`).
 - Audit log tidak dapat diedit atau dihapus.
-- Untuk aktivitas yang dicatat, informasi yang dapat disediakan antara lain aktor, tindakan, jenis entitas, ID entitas, waktu, request ID, serta nilai lama/baru atau alasan apabila tersedia (khusus `UPDATE_PRICE`, hanya mencatat aktor dan waktu tanpa nilai lama/baru sesuai keputusan `TBD-02`).
+- Untuk aktivitas yang dicatat, informasi yang dapat disediakan antara lain aktor, tindakan, jenis entitas, ID entitas, waktu, request ID, serta nilai lama/baru atau alasan apabila tersedia (khusus `CREATE_SALE_PRICE` dan `UPDATE_SALE_PRICE`, hanya mencatat aktor dan waktu tanpa nilai lama/baru sesuai keputusan `TBD-02` dan amendemen ADR 0002).
 - Kegagalan menulis audit untuk transaksi penerimaan, VOID penerimaan, penjualan, atau VOID penjualan yang diwajibkan harus menggagalkan transaksi terkait dalam satu transaksi database.
 
-**Batasan:** daftar final filter, kolom tampilan, dan pagination Audit Log (`TBD-09`) serta DDL/privilege runtime POS (`TBD-06`) dikunci sebelum implementasi fase terkait.
+**Batasan:** filter dan pagination Audit Log tetap mengikuti `TBD-09`. DDL/privilege runtime POS (`TBD-06`) telah dikunci pada [ADR 0002](docs/adr/0002-pos-gate-architecture.md); implementasinya tetap menunggu task database POS.
 
 ## 6.7 PG-07 — POS / Kasir
+
+Kontrak API normatif untuk POS, termasuk route, payload, response, error, idempotency, dan matriks RBAC, ditetapkan pada [docs/pos-api-contract.md](docs/pos-api-contract.md) berdasarkan [ADR 0002](docs/adr/0002-pos-gate-architecture.md).
 
 ### Tujuan
 
@@ -697,6 +699,8 @@ Menampilkan detail transaksi dan menyediakan aksi sesuai aturan.
 UI harus meminta konfirmasi sebelum tindakan VOID dijalankan. Konfirmasi ini adalah pengaman interaksi dan bukan field alasan. Jangan membuat field alasan wajib karena bertentangan dengan keputusan bisnis POS.
 
 ## 6.11 PG-11 — Struk dan pencetakan
+
+Baseline cetak adalah browser print CSS 58 mm/80 mm dan dialog cetak sistem. Keputusan arsitektur tercatat pada [ADR 0002](docs/adr/0002-pos-gate-architecture.md); uji printer/perangkat fisik tetap menjadi deliverable GPOS-04.
 
 ### Konten struk wajib
 
@@ -998,12 +1002,12 @@ PRD ini tidak menggantikan data dictionary pada Master Blueprint. Bagian ini han
 
 ## 11.2 Entitas POS yang masih berupa rancangan konseptual
 
-| Entitas                | Fungsi produk                                                                       | Status               |
-| ---------------------- | ----------------------------------------------------------------------------------- | -------------------- |
-| `fish_sale_prices`     | Harga terbaru untuk kombinasi spesies dan ukuran.                                   | PROPOSED — TECHNICAL |
-| `fish_sales`           | Catatan penjualan satu batch, jumlah, snapshot harga, pembayaran, aktor, dan waktu. | PROPOSED — TECHNICAL |
-| `fish_sale_voids`      | Catatan reversal penjualan.                                                         | PROPOSED — TECHNICAL |
-| `sale_daily_sequences` | Penomoran transaksi penjualan per hari tanpa batas 999.                             | PROPOSED — TECHNICAL |
+| Entitas                | Fungsi produk                                                                       | Status                     |
+| ---------------------- | ----------------------------------------------------------------------------------- | -------------------------- |
+| `fish_sale_prices`     | Harga terbaru untuk kombinasi spesies dan ukuran.                                   | APPROVED — OWNER, ADR 0002 |
+| `fish_sales`           | Catatan penjualan satu batch, jumlah, snapshot harga, pembayaran, aktor, dan waktu. | APPROVED — OWNER, ADR 0002 |
+| `fish_sale_voids`      | Catatan reversal penjualan.                                                         | APPROVED — OWNER, ADR 0002 |
+| `sale_daily_sequences` | Penomoran transaksi penjualan per hari tanpa batas 999.                             | APPROVED — OWNER, ADR 0002 |
 
 ### Aturan snapshot penjualan
 
@@ -1033,22 +1037,22 @@ Endpoint POS pada blueprint masih usulan dan belum menjadi kontrak final. Daftar
 
 Keduanya mengikuti header autentikasi dan `Idempotency-Key` UUIDv4, beserta kontrak validasi dan error pada Master Blueprint V4.5.
 
-## 12.2 Kandidat API POS
+## 12.2 API POS (`APPROVED — OWNER`, ADR 0002)
 
-| Operasi                | Kandidat endpoint                          | Tujuan                                                       |
-| ---------------------- | ------------------------------------------ | ------------------------------------------------------------ |
-| Daftar batch siap jual | `GET /api/v1/pos/batches`                  | Daftar batch active dengan stok > 0, beserta harga jika ada. |
-| Detail batch POS       | `GET /api/v1/pos/batches/{batch_id}`       | Memuat ulang stok dan harga terbaru.                         |
-| Daftar harga           | `GET /api/v1/pos/prices`                   | Melihat daftar harga sesuai hak akses.                       |
-| Tambah harga           | `POST /api/v1/pos/prices`                  | Membuat harga untuk kombinasi yang belum tersedia.           |
-| Ubah harga             | `PATCH /api/v1/pos/prices/{price_id}`      | Mengubah harga kombinasi yang telah ada.                     |
-| Buat penjualan         | `POST /api/v1/fish-sales`                  | Membuat transaksi penjualan dengan validasi backend.         |
-| Daftar penjualan       | `GET /api/v1/fish-sales`                   | Melihat seluruh transaksi bagi role POS.                     |
-| Detail penjualan       | `GET /api/v1/fish-sales/{sale_id}`         | Melihat detail transaksi.                                    |
-| VOID penjualan         | `POST /api/v1/fish-sales/{sale_id}/void`   | Membuat reversal penjualan.                                  |
-| Cetak ulang            | `GET /api/v1/fish-sales/{sale_id}/receipt` | Mengambil data struk untuk pembuat transaksi yang berhak.    |
+| Operasi                | Kandidat endpoint                         | Tujuan                                                       |
+| ---------------------- | ----------------------------------------- | ------------------------------------------------------------ |
+| Daftar batch siap jual | `GET /api/v1/pos/batches`                 | Daftar batch active dengan stok > 0, beserta harga jika ada. |
+| Detail batch POS       | `GET /api/v1/pos/batches/{batch_id}`      | Memuat ulang stok dan harga terbaru.                         |
+| Daftar harga           | `GET /api/v1/pos/prices`                  | Melihat daftar harga sesuai hak akses.                       |
+| Tambah harga           | `POST /api/v1/pos/prices`                 | Membuat harga untuk kombinasi yang belum tersedia.           |
+| Ubah harga             | `PATCH /api/v1/pos/prices/{price_id}`     | Mengubah harga kombinasi yang telah ada.                     |
+| Buat penjualan         | `POST /api/v1/pos/sales`                  | Membuat transaksi penjualan dengan validasi backend.         |
+| Daftar penjualan       | `GET /api/v1/pos/sales`                   | Melihat seluruh transaksi bagi role POS.                     |
+| Detail penjualan       | `GET /api/v1/pos/sales/{sale_id}`         | Melihat detail transaksi.                                    |
+| VOID penjualan         | `POST /api/v1/pos/sales/{sale_id}/void`   | Membuat reversal penjualan.                                  |
+| Cetak ulang            | `GET /api/v1/pos/sales/{sale_id}/receipt` | Mengambil data struk untuk pembuat transaksi yang berhak.    |
 
-Developer tidak boleh menganggap daftar kandidat ini sebagai payload final. Request/response schema, validasi, error code, pagination, dan strategi refresh/konfirmasi harga harus disetujui dalam API Contract sebelum implementasi final.
+Payload, response, validasi, error code, pagination/filter, dan strategi refresh/konfirmasi harga normatif tercatat pada [docs/pos-api-contract.md](docs/pos-api-contract.md). Kontrak tersebut disetujui melalui ADR 0002; implementasi tetap mengikuti gate dan urutan task.
 
 ---
 
@@ -1130,17 +1134,17 @@ Fitur POS dinyatakan diterima apabila:
 
 Bagian ini adalah daftar pertanyaan/keputusan yang memang belum dijawab dalam blueprint. AI dan tim pengembang tidak boleh menetapkan jawabannya secara sepihak.
 
-| ID     | Topik                         | Status                                                    | Keputusan / Yang masih perlu diputuskan                                                                                                                                                                                                                                                               |
-| ------ | ----------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| TBD-01 | Batas harga jual              | `APPROVED — OWNER`                                        | Ditetapkan minimal Rp 1 dan maksimum Rp 10.000.000 per ekor (`BIGINT`, Rupiah bulat tanpa desimal).                                                                                                                                                                                                   |
-| TBD-02 | Audit perubahan harga         | `APPROVED — OWNER`                                        | Dicatat di `audit_logs` (`action = 'UPDATE_PRICE'`) hanya dengan aktor dan waktu (`old_values = NULL`, `new_values = NULL`).                                                                                                                                                                          |
-| TBD-03 | Printer aktual                | `TBD — NEEDS DECISION`                                    | Pendekatan ESC/POS Bluetooth (mobile) & Web USB/Browser Print (PC/laptop) disetujui, namun merek/model, bridge iOS/iPhone, SDK, dan uji fisik lintas perangkat wajib dikunci sebelum implementasi final.                                                                                              |
-| TBD-04 | Kontrak API POS               | `TBD — NEEDS DECISION`                                    | Request/response final, error code (termasuk rollback konkurensi/harga berubah), pagination, validasi, dan refresh/confirm price.                                                                                                                                                                     |
-| TBD-05 | Sequence penjualan            | `APPROVED — OWNER`                                        | Menggunakan tabel `sale_daily_sequences` (`sale_date DATE PRIMARY KEY`, `last_number BIGINT`) tanpa batas 999.                                                                                                                                                                                        |
-| TBD-06 | Audit POS dan privilege       | `APPROVED — OWNER` _(Actions)_ / `TBD` _(DDL/Privileges)_ | Nilai `action` (`CREATE_SALE`, `VOID_SALE`, `UPDATE_PRICE`) telah disetujui; trigger, `ALTER CONSTRAINT`, index, dan privilege runtime final dikunci pada `GPOS-02`.                                                                                                                                  |
-| TBD-07 | Hak halaman audit untuk Kasir | `APPROVED — OWNER`                                        | Role `Kasir` dilarang (`Forbidden`) mengakses data maupun halaman Audit Log.                                                                                                                                                                                                                          |
-| TBD-08 | Pengelolaan akun              | `PARTIALLY RESOLVED — OWNER` (ADR 0001)                   | Akun awal `Owner` lokal dibuat lewat CLI idempoten dengan kredensial dari `.env`; akun yang sudah ada tidak diubah. Registrasi publik, deaktivasi, perubahan role, reset kata sandi, dan administrasi pengguna tetap TBD.                                                                             |
-| TBD-09 | Pagination & filter daftar    | `APPROVED — OWNER` (ADR 0001)                             | `page=1`, `limit=20`, maksimum `100`; rentang `startDate`/`endDate` ISO 8601 diterapkan inklusif pada timestamp transaksi utama; `status` hanya memakai enum resmi; default terbaru dahulu (`DESC`) dengan `id DESC` sebagai tie-breaker stabil. Pencarian dan pilihan sort tambahan belum disetujui. |
+| ID     | Topik                         | Status                                  | Keputusan / Yang masih perlu diputuskan                                                                                                                                                                                                                                                               |
+| ------ | ----------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TBD-01 | Batas harga jual              | `APPROVED — OWNER`                      | Ditetapkan minimal Rp 1 dan maksimum Rp 10.000.000 per ekor (`BIGINT`, Rupiah bulat tanpa desimal).                                                                                                                                                                                                   |
+| TBD-02 | Audit perubahan harga         | `APPROVED — OWNER` (ADR 0002 amendment) | Tambah harga memakai `CREATE_SALE_PRICE`; ubah harga memakai `UPDATE_SALE_PRICE`. Keduanya hanya mencatat aktor dan waktu (`old_values = NULL`, `new_values = NULL`).                                                                                                                                 |
+| TBD-03 | Arsitektur cetak thermal      | `APPROVED — OWNER` (ADR 0002)           | Browser print CSS 58/80 mm dan dialog cetak sistem disetujui. Printer/perangkat fisik wajib diuji pada GPOS-04 sebelum kompatibilitas spesifik diklaim.                                                                                                                                               |
+| TBD-04 | Kontrak API POS               | `APPROVED — OWNER` (ADR 0002)           | Kontrak normatif route, request/response, error, pagination/filter, validasi harga, idempotency, dan RBAC ada di `docs/pos-api-contract.md`.                                                                                                                                                          |
+| TBD-05 | Sequence penjualan            | `APPROVED — OWNER`                      | Menggunakan tabel `sale_daily_sequences` (`sale_date DATE PRIMARY KEY`, `last_number BIGINT`) tanpa batas 999.                                                                                                                                                                                        |
+| TBD-06 | Audit POS dan privilege       | `APPROVED — OWNER` (ADR 0002)           | Empat tabel POS, kalkulasi stok, trigger, dependent transaction guard, audit action, index, dan granular `pfi_app_runtime` privileges telah dikunci; belum diterapkan ke database.                                                                                                                    |
+| TBD-07 | Hak halaman audit untuk Kasir | `APPROVED — OWNER`                      | Role `Kasir` dilarang (`Forbidden`) mengakses data maupun halaman Audit Log.                                                                                                                                                                                                                          |
+| TBD-08 | Pengelolaan akun              | `PARTIALLY RESOLVED — OWNER` (ADR 0001) | Akun awal `Owner` lokal dibuat lewat CLI idempoten dengan kredensial dari `.env`; akun yang sudah ada tidak diubah. Registrasi publik, deaktivasi, perubahan role, reset kata sandi, dan administrasi pengguna tetap TBD.                                                                             |
+| TBD-09 | Pagination & filter daftar    | `APPROVED — OWNER` (ADR 0001)           | `page=1`, `limit=20`, maksimum `100`; rentang `startDate`/`endDate` ISO 8601 diterapkan inklusif pada timestamp transaksi utama; `status` hanya memakai enum resmi; default terbaru dahulu (`DESC`) dengan `id DESC` sebagai tie-breaker stabil. Pencarian dan pilihan sort tambahan belum disetujui. |
 
 Jangan menyelesaikan TBD dengan tebakan. Catat pertanyaan dalam daftar keputusan produk, ajukan kepada pemilik produk, lalu perbarui PRD dan blueprint setelah mendapat persetujuan.
 

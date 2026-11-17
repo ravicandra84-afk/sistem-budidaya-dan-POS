@@ -5,7 +5,7 @@ import { ReceivingController } from "./receiving.controller";
 import { ReceivingService } from "./receiving.service";
 import {
   DEPENDENT_TRANSACTION_GUARD,
-  NoDependentTransactionGuard,
+  DatabaseDependentTransactionGuard,
 } from "./dependent-transaction.guard";
 
 @Module({
@@ -16,7 +16,7 @@ import {
     RolesGuard,
     {
       provide: DEPENDENT_TRANSACTION_GUARD,
-      useClass: NoDependentTransactionGuard,
+      useClass: DatabaseDependentTransactionGuard,
     },
   ],
 })

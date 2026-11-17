@@ -1,6 +1,8 @@
 import {
   BATCH_STATUSES,
   FISH_SIZES,
+  POS_ROLES,
+  PRICE_MANAGEMENT_ROLES,
   USER_ROLES,
   receiveFishSchema,
   voidIncomingFishSchema,
@@ -21,7 +23,10 @@ describe("V4.5 shared domain constants", () => {
       "Owner",
       "Admin Operasional",
       "Kepala Budidaya",
+      "Kasir",
     ]);
+    expect(POS_ROLES).toEqual(["Owner", "Admin Operasional", "Kasir"]);
+    expect(PRICE_MANAGEMENT_ROLES).toEqual(["Owner", "Admin Operasional"]);
     expect(BATCH_STATUSES).toEqual(["active", "completed", "voided"]);
     expect(FISH_SIZES).toEqual([
       "2-4 cm",

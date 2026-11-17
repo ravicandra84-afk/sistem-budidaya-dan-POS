@@ -6,6 +6,7 @@ import { AuditModule } from "./modules/audit/audit.module";
 import { BatchesModule } from "./modules/batches/batches.module";
 import { ReceivingModule } from "./modules/receiving/receiving.module";
 import { SpeciesModule } from "./modules/species/species.module";
+import { PosModule } from "./modules/pos/pos.module";
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { SpeciesModule } from "./modules/species/species.module";
     ReceivingModule,
     BatchesModule,
     AuditModule,
+    PosModule,
   ],
 })
 export class AppModule implements NestModule {

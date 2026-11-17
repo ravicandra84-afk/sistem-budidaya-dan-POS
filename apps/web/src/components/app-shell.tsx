@@ -12,6 +12,7 @@ const roleLabel: Record<UserRole, string> = {
   Owner: "Owner",
   "Admin Operasional": "Admin Operasional",
   "Kepala Budidaya": "Kepala Budidaya",
+  Kasir: "Kasir",
 };
 
 export function AppShell({ children }: { children: ReactNode }) {
