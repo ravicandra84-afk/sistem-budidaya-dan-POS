@@ -393,7 +393,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 
 **Acceptance criteria:**
 
-- Owner tidak dapat membuat penerimaan atau melakukan VOID penerimaan.
+- **Owner-approved update (2026-11-17):** Owner dapat membuat dan melakukan VOID penerimaan.
 - Admin Operasional dapat membuat dan melakukan VOID penerimaan sesuai aturan.
 - Kepala Budidaya dapat membuat penerimaan tetapi tidak dapat melakukan VOID penerimaan.
 - Akses data/fitur lain mengikuti matriks V4.5.
@@ -455,7 +455,7 @@ Phase 10 Release, deployment, backup, monitoring, dan handover
 **Pekerjaan:**
 
 - Implementasikan endpoint VOID sesuai kontrak V4.5.
-- Hanya Admin Operasional yang dapat melakukan VOID penerimaan.
+- Owner dan Admin Operasional dapat melakukan VOID penerimaan.
 - Alasan VOID wajib.
 - Tolak VOID jika ada transaksi turunan.
 - Lock batch dengan `SELECT ... FOR UPDATE` dan validasi status sebelum mutasi.

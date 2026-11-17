@@ -1,6 +1,6 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { randomUUID } from "node:crypto";
-import { getLocalMigrationUrl } from "../prisma/runtime-env";
+import { getLocalTestDatabaseUrl } from "../prisma/runtime-env";
 
 const databaseSuite =
   process.env.RUN_V45_DB_TESTS === "1" ? describe : describe.skip;
@@ -8,10 +8,19 @@ const rollbackFixtureMessage = "Rollback V4.5 test fixtures";
 
 databaseSuite("V4.5 PostgreSQL guards", () => {
   const prisma = new PrismaClient({
-    datasources: { db: { url: getLocalMigrationUrl() } },
+    datasources: { db: { url: getLocalTestDatabaseUrl() } },
+  });
+
+  beforeAll(async () => {
+    await prisma.fishSpecies.upsert({
+      where: { speciesCode: "LELE" },
+      create: { speciesCode: "LELE", speciesName: "Lele" },
+      update: {},
+    });
   });
 
   afterAll(async () => {
+    await prisma.fishSpecies.deleteMany({ where: { speciesCode: "LELE" } });
     await prisma.$disconnect();
   });
 

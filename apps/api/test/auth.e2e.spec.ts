@@ -144,4 +144,13 @@ describe("V4.5 authentication HTTP integration", () => {
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe("FORBIDDEN");
   });
+
+  it("rate limits login attempts after five requests per minute", async () => {
+    const response = await request(app.getHttpServer())
+      .post("/api/v1/auth/login")
+      .send({ email: activeOwner.email, password: "incorrect-password" });
+
+    expect(response.status).toBe(429);
+    expect(response.body.error.code).toBe("RATE_LIMIT_EXCEEDED");
+  });
 });

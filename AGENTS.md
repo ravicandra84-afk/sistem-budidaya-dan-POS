@@ -156,9 +156,8 @@ Do not change units, bounds, optionality, defaults, or enum values without expli
 
 ### 6.3 Receiving roles and VOID
 
-- Receiving creation is permitted to `Admin Operasional` and `Kepala Budidaya`.
-- `Owner` must not be granted receiving-create permission by inference.
-- Receiving VOID is permitted to `Admin Operasional` only.
+- **Owner-approved update (2026-11-17):** receiving creation is permitted to `Owner`, `Admin Operasional`, and `Kepala Budidaya`.
+- Receiving VOID is permitted to `Owner` and `Admin Operasional`.
 - Receiving VOID requires a reason.
 - Receiving VOID must be blocked when dependent transactions exist.
 - A receiving VOID is recorded separately; do not delete or mutate the original receipt.

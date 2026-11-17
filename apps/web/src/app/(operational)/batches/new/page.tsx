@@ -91,6 +91,7 @@ export default function NewReceivingPage() {
   }, [session, speciesReload]);
 
   const canCreate =
+    session?.user.role === "Owner" ||
     session?.user.role === "Admin Operasional" ||
     session?.user.role === "Kepala Budidaya";
 

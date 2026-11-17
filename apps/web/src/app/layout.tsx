@@ -4,6 +4,8 @@ import { JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import { AuthProvider } from "@/features/auth/auth-provider";
 import "./globals.css";
 
+export const dynamic = "force-dynamic";
+
 const sans = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta",
   subsets: ["latin"],

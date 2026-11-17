@@ -33,4 +33,25 @@ describe("API environment validation", () => {
       }),
     ).toThrow("Invalid API environment configuration");
   });
+
+  it.each(["*", "http://localhost:3000/path", "not-an-origin"])(
+    "rejects an unsafe CORS origin %s",
+    (origin) => {
+      expect(() =>
+        loadApiEnvironment({
+          ...validEnvironment,
+          CORS_ALLOWED_ORIGINS: origin,
+        }),
+      ).toThrow("Invalid API environment configuration");
+    },
+  );
+
+  it("rejects a frontend URL that is not an origin", () => {
+    expect(() =>
+      loadApiEnvironment({
+        ...validEnvironment,
+        FRONTEND_URL: "http://localhost:3000/login",
+      }),
+    ).toThrow("Invalid API environment configuration");
+  });
 });

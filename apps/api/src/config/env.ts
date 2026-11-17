@@ -4,6 +4,18 @@ import { z } from "zod";
 
 dotenv.config({ path: resolve(__dirname, "../../../../.env"), quiet: true });
 
+const originSchema = z
+  .string()
+  .url()
+  .refine((value) => {
+    try {
+      const url = new URL(value);
+      return ["http:", "https:"].includes(url.protocol) && url.origin === value;
+    } catch {
+      return false;
+    }
+  });
+
 const apiEnvironmentSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
@@ -29,8 +41,15 @@ const apiEnvironmentSchema = z.object({
   JWT_EXPIRES_IN: z.string().min(1),
   JWT_ISSUER: z.string().min(1),
   JWT_AUDIENCE: z.string().min(1),
-  FRONTEND_URL: z.url(),
-  CORS_ALLOWED_ORIGINS: z.string().min(1),
+  FRONTEND_URL: originSchema,
+  CORS_ALLOWED_ORIGINS: z
+    .string()
+    .min(1)
+    .refine((value) =>
+      value
+        .split(",")
+        .every((origin) => originSchema.safeParse(origin.trim()).success),
+    ),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(100),
   BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(10).max(15).default(12),

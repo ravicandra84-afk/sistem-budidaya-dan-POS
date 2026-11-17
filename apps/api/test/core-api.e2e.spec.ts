@@ -380,7 +380,7 @@ describe("V4.5 core API HTTP integration", () => {
     expect(futureDate.body.error.code).toBe("INVALID_ENTRY_DATE");
   });
 
-  it("rejects Owner receiving creation before a database transaction", async () => {
+  it("allows Owner receiving creation", async () => {
     prismaMock.user.findUnique.mockResolvedValue({
       id: actorId,
       name: "Owner Test",
@@ -394,9 +394,8 @@ describe("V4.5 core API HTTP integration", () => {
       .set("Idempotency-Key", "5c7c0806-6b9b-4af4-9f4b-5d1ed5b9e646")
       .send(receiptInput);
 
-    expect(response.status).toBe(403);
-    expect(response.body.error.code).toBe("FORBIDDEN");
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(response.status).toBe(201);
+    expect(transactionMock.batch.create).toHaveBeenCalledTimes(1);
   });
 
   it("rejects a missing or non-v4 idempotency key before opening a transaction", async () => {
@@ -434,7 +433,7 @@ describe("V4.5 core API HTTP integration", () => {
     ).toBe(true);
   });
 
-  it("denies receiving VOID to Owner before a database transaction", async () => {
+  it("allows Owner to VOID an eligible receiving", async () => {
     prismaMock.user.findUnique.mockResolvedValue({
       id: actorId,
       name: "Owner Test",
@@ -448,8 +447,8 @@ describe("V4.5 core API HTTP integration", () => {
       .set("Idempotency-Key", "5c7c0806-6b9b-4af4-9f4b-5d1ed5b9e646")
       .send({ reason: "Kesalahan pencatatan" });
 
-    expect(response.status).toBe(403);
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(transactionMock.incomingFishVoid.create).toHaveBeenCalledTimes(1);
   });
 
   it("rejects VOID for a batch that is not active", async () => {

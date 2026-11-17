@@ -76,7 +76,8 @@ export default function BatchDetailPage() {
   }, [batchId, reloadKey, session]);
 
   const canVoid =
-    session?.user.role === "Admin Operasional" &&
+    (session?.user.role === "Owner" ||
+      session?.user.role === "Admin Operasional") &&
     detail?.batch.status === "active" &&
     Boolean(detail.incoming_fish) &&
     !detail.incoming_fish?.voided;
@@ -260,10 +261,12 @@ export default function BatchDetailPage() {
             </DetailValue>
           </div>
           {detail.batch.status === "active" &&
+          session?.user.role !== "Owner" &&
           session?.user.role !== "Admin Operasional" ? (
             <p className="mt-3 flex items-center gap-2 text-xs text-slate-500">
               <ShieldCheck className="size-4" aria-hidden="true" />
-              VOID penerimaan hanya dapat dilakukan Admin Operasional.
+              VOID penerimaan hanya dapat dilakukan Owner atau Admin
+              Operasional.
             </p>
           ) : null}
         </section>

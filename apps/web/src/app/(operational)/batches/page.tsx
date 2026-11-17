@@ -86,6 +86,7 @@ export default function BatchesPage() {
   }, [session, page, limit, startDate, endDate, status, reloadKey]);
 
   const canCreate =
+    session?.user.role === "Owner" ||
     session?.user.role === "Admin Operasional" ||
     session?.user.role === "Kepala Budidaya";
 

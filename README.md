@@ -14,7 +14,7 @@ Requirements: Node.js 22.12+, npm 11, and PostgreSQL 13+.
 6. Seed official fish species with `npm run db:seed:species`.
 7. Set `SEED_INITIAL_OWNER_NAME`, `SEED_INITIAL_OWNER_EMAIL`, and `SEED_INITIAL_OWNER_PASSWORD` in local `.env`, then run `npm run db:provision-owner`. Existing accounts are not changed.
 
-Local database commands reject non-local hosts and databases other than `pfi_db`. Do not point development, migration, seed, or test commands at production.
+Development migration, seed, and Owner provisioning commands reject non-local hosts and databases other than `pfi_db`. The test migration command and PostgreSQL test suites are separately restricted to localhost `pfi_test`; never point them at `pfi_db` or production.
 
 ## Checks
 
@@ -22,7 +22,9 @@ Local database commands reject non-local hosts and databases other than `pfi_db`
 - `npm run typecheck`
 - `npm run lint`
 - `npm test`
-- `RUN_V45_DB_TESTS=1 npm run test --workspace @pfi/api -- --runInBand` (local `pfi_db` only; fixtures roll back)
+- `npm run db:test:migrate --workspace @pfi/api` (applies additive migrations only to local `pfi_test`)
+- `npm run db:test:seed --workspace @pfi/api` (idempotently seeds official species only to local `pfi_test`)
+- `RUN_V45_DB_TESTS=1 npm run test --workspace @pfi/api -- --runInBand` (local `pfi_test` only; fixtures are cleaned after the suite)
 
 The API uses `DATABASE_URL` at runtime. Prisma migrations, local seed commands, and initial Owner provisioning use `MIGRATION_DATABASE_URL`; credentials must be supplied through `.env` and must never be committed.
 

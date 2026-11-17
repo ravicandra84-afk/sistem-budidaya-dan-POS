@@ -30,7 +30,7 @@ export class ReceivingController {
   constructor(private readonly receivingService: ReceivingService) {}
 
   @Post()
-  @Roles("Admin Operasional", "Kepala Budidaya")
+  @Roles("Owner", "Admin Operasional", "Kepala Budidaya")
   create(
     @CurrentUser() user: AuthenticatedUser,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
@@ -42,7 +42,7 @@ export class ReceivingController {
 
   @Post(":batch_id/void")
   @HttpCode(HttpStatus.OK)
-  @Roles("Admin Operasional")
+  @Roles("Owner", "Admin Operasional")
   voidEntry(
     @Param("batch_id", new ZodValidationPipe(z.uuid())) batchId: string,
     @CurrentUser() user: AuthenticatedUser,

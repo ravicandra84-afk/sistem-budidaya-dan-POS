@@ -167,7 +167,7 @@ Aplikasi digunakan oleh personel internal PFI. Akses ditentukan oleh role yang m
 
 | Role                  | Gambaran pengguna                      | Kebutuhan utama                                                                                                                                            |
 | --------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Owner**             | Pemilik/pengelola usaha                | Memantau data penerimaan, audit, dan seluruh transaksi POS; mengelola harga; melakukan transaksi POS dan VOID penjualan.                                   |
+| **Owner**             | Pemilik/pengelola usaha                | Memantau data penerimaan/audit; membuat dan VOID penerimaan; serta menggunakan seluruh fitur POS yang disetujui.                                           |
 | **Admin Operasional** | Pengelola operasional dan administrasi | Mencatat penerimaan, mengelola harga, menangani VOID penerimaan, serta menjalankan dan mengawasi transaksi POS.                                            |
 | **Kepala Budidaya**   | Penanggung jawab kegiatan budidaya     | Melihat penerimaan/batch, membuat pencatatan penerimaan, dan melihat audit log. Tidak mengakses POS.                                                       |
 | **Kasir**             | Petugas transaksi penjualan            | Mengakses POS, menjual ikan, melihat seluruh penjualan, melakukan VOID penjualan, dan mencetak ulang transaksi yang dibuat sendiri. Tidak mengelola harga. |
@@ -178,8 +178,8 @@ Aplikasi digunakan oleh personel internal PFI. Akses ditentukan oleh role yang m
 | ----------------------------------------------- | -----------: | ----------------: | -----------------------------: | -----------------------------------: |
 | Melihat data penerimaan dan batch               |           Ya |                Ya |                             Ya |           Tidak (`APPROVED — OWNER`) |
 | Melihat audit log                               | Ya _(Semua)_ |      Ya _(Semua)_ | Ya _(Khusus Penerimaan/Batch)_ | Tidak (`APPROVED — OWNER`, `TBD-07`) |
-| Membuat penerimaan ikan                         |        Tidak |                Ya |                             Ya |                                Tidak |
-| VOID penerimaan ikan                            |        Tidak |                Ya |                          Tidak |                                Tidak |
+| Membuat penerimaan ikan                         |           Ya |                Ya |                             Ya |                                Tidak |
+| VOID penerimaan ikan                            |           Ya |                Ya |                          Tidak |                                Tidak |
 | Mengakses halaman POS                           |           Ya |                Ya |                          Tidak |                                   Ya |
 | Melihat seluruh transaksi penjualan             |           Ya |                Ya |                          Tidak |                                   Ya |
 | Membuat transaksi penjualan                     |           Ya |                Ya |                          Tidak |                                   Ya |
@@ -329,8 +329,8 @@ Memberi akses untuk melihat penerimaan dan batch sesuai matriks role.
 
 - Owner, Admin Operasional, dan Kepala Budidaya dapat melihat data.
 - Pengguna dapat membuka detail batch.
-- Aksi buat penerimaan hanya muncul untuk Admin Operasional dan Kepala Budidaya.
-- Aksi VOID penerimaan hanya muncul untuk Admin Operasional ketika batch memenuhi syarat.
+- Aksi buat penerimaan hanya muncul untuk Owner, Admin Operasional, dan Kepala Budidaya.
+- Aksi VOID penerimaan hanya muncul untuk Owner dan Admin Operasional ketika batch memenuhi syarat.
 - Nilai stok aktual tidak boleh disajikan sebagai angka manual yang dapat diedit. Integrasi tampilan stok harus menggunakan perhitungan transaksi valid setelah layanan stok tersedia.
 
 ### Kondisi gagal
@@ -348,10 +348,9 @@ Mencatat ikan masuk dan membentuk satu batch baru secara otomatis.
 
 ### Pengguna yang berwenang
 
+- Owner.
 - Admin Operasional.
 - Kepala Budidaya.
-
-Owner tidak berwenang membuat penerimaan pada V4.5.
 
 ### Field form
 
@@ -1059,15 +1058,14 @@ Developer tidak boleh menganggap daftar kandidat ini sebagai payload final. Requ
 
 Fitur penerimaan dinyatakan diterima apabila:
 
-- [ ] Hanya Admin Operasional dan Kepala Budidaya dapat membuat penerimaan.
-- [ ] Owner ditolak ketika mencoba membuat penerimaan.
+- [ ] Owner, Admin Operasional, dan Kepala Budidaya dapat membuat penerimaan.
 - [ ] Validasi field wajib, enum, rentang angka, dan zona waktu bekerja.
 - [ ] Setiap penerimaan valid menghasilkan satu batch baru.
 - [ ] Relasi batch : penerimaan tepat 1:1.
 - [ ] Kode batch mengikuti format yang dikunci.
 - [ ] Sequence batch aman terhadap request bersamaan dan menolak setelah 999.
 - [ ] Retry idempotent tidak menggandakan batch.
-- [ ] VOID penerimaan hanya dapat dilakukan Admin Operasional.
+- [ ] VOID penerimaan hanya dapat dilakukan Owner atau Admin Operasional.
 - [ ] VOID penerimaan memerlukan alasan dan ditolak jika ada transaksi turunan.
 - [ ] Record historis tidak dapat diubah atau dihapus.
 - [ ] Seluruh 32 test case V4.5 lulus.

@@ -38,9 +38,12 @@ function formatDecimal(value: Prisma.Decimal): string {
 @Injectable()
 export class ReceivingService {
   private readonly lockTimeout: string;
+  private readonly transactionTimeout: number;
 
   constructor(private readonly prisma: PrismaService) {
-    this.lockTimeout = `${loadApiEnvironment().DB_LOCK_TIMEOUT_MS}ms`;
+    const lockTimeoutMs = loadApiEnvironment().DB_LOCK_TIMEOUT_MS;
+    this.lockTimeout = `${lockTimeoutMs}ms`;
+    this.transactionTimeout = lockTimeoutMs + 5_000;
   }
 
   async create(
@@ -62,11 +65,12 @@ export class ReceivingService {
     const payloadHash = hashBusinessPayload(input);
 
     try {
-      const body = await this.prisma.$transaction(async (transaction) => {
-        await transaction.$queryRaw`SELECT set_config('lock_timeout', ${this.lockTimeout}, true)`;
-        const [idempotencyRow] = await transaction.$queryRaw<
-          Array<{ id: string }>
-        >`
+      const body = await this.prisma.$transaction(
+        async (transaction) => {
+          await transaction.$queryRaw`SELECT set_config('lock_timeout', ${this.lockTimeout}, true)`;
+          const [idempotencyRow] = await transaction.$queryRaw<
+            Array<{ id: string }>
+          >`
           INSERT INTO "idempotency_keys"
             ("user_id", "endpoint", "idempotency_key", "payload_hash", "status")
           VALUES
@@ -75,117 +79,117 @@ export class ReceivingService {
           RETURNING "id"
         `;
 
-        if (!idempotencyRow) throw new ExistingIdempotencyKeyError();
+          if (!idempotencyRow) throw new ExistingIdempotencyKeyError();
 
-        const species = await transaction.fishSpecies.findUnique({
-          where: { id: input.species_id },
-          select: { id: true, isActive: true },
-        });
-        if (!species?.isActive) {
-          throw new ApiException(
-            422,
-            "SPECIES_NOT_ACTIVE",
-            "Spesies tidak aktif atau tidak ditemukan.",
-          );
-        }
+          const species = await transaction.fishSpecies.findUnique({
+            where: { id: input.species_id },
+            select: { id: true, isActive: true },
+          });
+          if (!species?.isActive) {
+            throw new ApiException(
+              422,
+              "SPECIES_NOT_ACTIVE",
+              "Spesies tidak aktif atau tidak ditemukan.",
+            );
+          }
 
-        await transaction.$executeRaw`
+          await transaction.$executeRaw`
           INSERT INTO "batch_daily_sequences" ("entry_date", "last_number")
           VALUES (${input.entry_date}::date, 0)
           ON CONFLICT ("entry_date") DO NOTHING
         `;
 
-        const [lockedSequence] = await transaction.$queryRaw<
-          Array<{ last_number: number }>
-        >`
+          const [lockedSequence] = await transaction.$queryRaw<
+            Array<{ last_number: number }>
+          >`
           SELECT "last_number"
           FROM "batch_daily_sequences"
           WHERE "entry_date" = ${input.entry_date}::date
           FOR UPDATE
         `;
-        if (!lockedSequence || lockedSequence.last_number >= 999) {
-          throw new ApiException(
-            422,
-            "BATCH_SEQUENCE_EXHAUSTED",
-            "Nomor batch harian telah mencapai batas.",
-          );
-        }
+          if (!lockedSequence || lockedSequence.last_number >= 999) {
+            throw new ApiException(
+              422,
+              "BATCH_SEQUENCE_EXHAUSTED",
+              "Nomor batch harian telah mencapai batas.",
+            );
+          }
 
-        const [sequence] = await transaction.$queryRaw<
-          Array<{ last_number: number }>
-        >`
+          const [sequence] = await transaction.$queryRaw<
+            Array<{ last_number: number }>
+          >`
           UPDATE "batch_daily_sequences"
           SET "last_number" = "last_number" + 1
           WHERE "entry_date" = ${input.entry_date}::date AND "last_number" < 999
           RETURNING "last_number"
         `;
-        if (!sequence) {
-          throw new ApiException(
-            422,
-            "BATCH_SEQUENCE_EXHAUSTED",
-            "Nomor batch harian telah mencapai batas.",
-          );
-        }
+          if (!sequence) {
+            throw new ApiException(
+              422,
+              "BATCH_SEQUENCE_EXHAUSTED",
+              "Nomor batch harian telah mencapai batas.",
+            );
+          }
 
-        const batch = await transaction.batch.create({
-          data: {
-            batchCode: `PFI-BCH-${input.entry_date.replaceAll("-", "")}-${String(sequence.last_number).padStart(3, "0")}`,
-            speciesId: species.id,
-            status: "active",
-            createdBy: actor.id,
-          },
-        });
-        const incomingFish = await transaction.incomingFish.create({
-          data: {
-            batchId: batch.id,
-            entryDate: new Date(`${input.entry_date}T00:00:00.000Z`),
-            quantity: input.quantity,
-            purchaseCapital: new Prisma.Decimal(input.purchase_capital),
-            shippingCapital: new Prisma.Decimal(input.shipping_capital),
-            weightSamplePer500:
-              input.weight_sample_per_500 == null
-                ? null
-                : new Prisma.Decimal(input.weight_sample_per_500),
-            fishSize: input.fish_size,
-            createdBy: actor.id,
-          },
-        });
-
-        await transaction.auditLog.create({
-          data: {
-            requestId: request.requestId,
-            actorId: actor.id,
-            action: "CREATE_ENTRY",
-            entityType: "incoming_fish",
-            entityId: incomingFish.id,
-            ipAddress: request.socket.remoteAddress?.slice(0, 45) ?? null,
-          },
-        });
-
-        const response: CachedResponse = {
-          status: "success",
-          message: "Penerimaan ikan berhasil dicatat dan Batch telah dibuat.",
-          data: {
-            batch: {
-              id: batch.id,
-              batch_code: batch.batchCode,
-              status: batch.status,
+          const batch = await transaction.batch.create({
+            data: {
+              batchCode: `PFI-BCH-${input.entry_date.replaceAll("-", "")}-${String(sequence.last_number).padStart(3, "0")}`,
+              speciesId: species.id,
+              status: "active",
+              createdBy: actor.id,
             },
-            incoming_fish: {
-              id: incomingFish.id,
-              entry_date: input.entry_date,
-              quantity: incomingFish.quantity,
-              purchase_capital: formatDecimal(incomingFish.purchaseCapital),
-              shipping_capital: formatDecimal(incomingFish.shippingCapital),
-              weight_sample_per_500: incomingFish.weightSamplePer500
-                ? formatDecimal(incomingFish.weightSamplePer500)
-                : null,
-              fish_size: incomingFish.fishSize,
+          });
+          const incomingFish = await transaction.incomingFish.create({
+            data: {
+              batchId: batch.id,
+              entryDate: new Date(`${input.entry_date}T00:00:00.000Z`),
+              quantity: input.quantity,
+              purchaseCapital: new Prisma.Decimal(input.purchase_capital),
+              shippingCapital: new Prisma.Decimal(input.shipping_capital),
+              weightSamplePer500:
+                input.weight_sample_per_500 == null
+                  ? null
+                  : new Prisma.Decimal(input.weight_sample_per_500),
+              fishSize: input.fish_size,
+              createdBy: actor.id,
             },
-          },
-        };
+          });
 
-        await transaction.$executeRaw`
+          await transaction.auditLog.create({
+            data: {
+              requestId: request.requestId,
+              actorId: actor.id,
+              action: "CREATE_ENTRY",
+              entityType: "incoming_fish",
+              entityId: incomingFish.id,
+              ipAddress: request.socket.remoteAddress?.slice(0, 45) ?? null,
+            },
+          });
+
+          const response: CachedResponse = {
+            status: "success",
+            message: "Penerimaan ikan berhasil dicatat dan Batch telah dibuat.",
+            data: {
+              batch: {
+                id: batch.id,
+                batch_code: batch.batchCode,
+                status: batch.status,
+              },
+              incoming_fish: {
+                id: incomingFish.id,
+                entry_date: input.entry_date,
+                quantity: incomingFish.quantity,
+                purchase_capital: formatDecimal(incomingFish.purchaseCapital),
+                shipping_capital: formatDecimal(incomingFish.shippingCapital),
+                weight_sample_per_500: incomingFish.weightSamplePer500
+                  ? formatDecimal(incomingFish.weightSamplePer500)
+                  : null,
+                fish_size: incomingFish.fishSize,
+              },
+            },
+          };
+
+          await transaction.$executeRaw`
           UPDATE "idempotency_keys"
           SET "status" = 'completed', "response_status" = 201,
               "response_body" = ${JSON.stringify(response)}::jsonb,
@@ -193,8 +197,10 @@ export class ReceivingService {
           WHERE "id" = ${idempotencyRow.id}::uuid
         `;
 
-        return response;
-      });
+          return response;
+        },
+        { timeout: this.transactionTimeout },
+      );
 
       return {
         ...body,
@@ -230,11 +236,12 @@ export class ReceivingService {
     });
 
     try {
-      const body = await this.prisma.$transaction(async (transaction) => {
-        await transaction.$queryRaw`SELECT set_config('lock_timeout', ${this.lockTimeout}, true)`;
-        const [idempotencyRow] = await transaction.$queryRaw<
-          Array<{ id: string }>
-        >`
+      const body = await this.prisma.$transaction(
+        async (transaction) => {
+          await transaction.$queryRaw`SELECT set_config('lock_timeout', ${this.lockTimeout}, true)`;
+          const [idempotencyRow] = await transaction.$queryRaw<
+            Array<{ id: string }>
+          >`
           INSERT INTO "idempotency_keys"
             ("user_id", "endpoint", "idempotency_key", "payload_hash", "status")
           VALUES
@@ -243,82 +250,84 @@ export class ReceivingService {
           RETURNING "id"
         `;
 
-        if (!idempotencyRow) throw new ExistingIdempotencyKeyError();
+          if (!idempotencyRow) throw new ExistingIdempotencyKeyError();
 
-        const [batch] = await transaction.$queryRaw<
-          Array<{ id: string; batch_code: string; status: string }>
-        >`
+          const [batch] = await transaction.$queryRaw<
+            Array<{ id: string; batch_code: string; status: string }>
+          >`
           SELECT "id", "batch_code", "status"
           FROM "batches"
           WHERE "id" = ${batchId}::uuid
           FOR UPDATE
         `;
-        if (!batch)
-          throw new ApiException(
-            404,
-            "BATCH_NOT_FOUND",
-            "Batch tidak ditemukan.",
-          );
-        if (batch.status !== "active") {
-          throw new ApiException(
-            409,
-            "BATCH_NOT_ACTIVE",
-            "Batch tidak berstatus active.",
-          );
-        }
+          if (!batch)
+            throw new ApiException(
+              404,
+              "BATCH_NOT_FOUND",
+              "Batch tidak ditemukan.",
+            );
+          if (batch.status !== "active") {
+            throw new ApiException(
+              409,
+              "BATCH_NOT_ACTIVE",
+              "Batch tidak berstatus active.",
+            );
+          }
 
-        const incomingFish = await transaction.incomingFish.findUnique({
-          where: { batchId },
-          select: { id: true },
-        });
-        if (!incomingFish)
-          throw new ApiException(
-            404,
-            "BATCH_NOT_FOUND",
-            "Data penerimaan tidak ditemukan.",
-          );
+          const incomingFish = await transaction.incomingFish.findUnique({
+            where: { batchId },
+            select: { id: true },
+          });
+          if (!incomingFish)
+            throw new ApiException(
+              404,
+              "BATCH_NOT_FOUND",
+              "Data penerimaan tidak ditemukan.",
+            );
 
-        await transaction.incomingFishVoid.create({
-          data: {
-            incomingFishId: incomingFish.id,
-            reason: input.reason,
-            voidedBy: actor.id,
-          },
-        });
-        await transaction.batch.update({
-          where: { id: batchId },
-          data: { status: "voided" },
-        });
-        await transaction.auditLog.create({
-          data: {
-            requestId: request.requestId,
-            actorId: actor.id,
-            action: "VOID_ENTRY",
-            entityType: "incoming_fish",
-            entityId: incomingFish.id,
-            reason: input.reason,
-            ipAddress: request.socket.remoteAddress?.slice(0, 45) ?? null,
-          },
-        });
+          await transaction.incomingFishVoid.create({
+            data: {
+              incomingFishId: incomingFish.id,
+              reason: input.reason,
+              voidedBy: actor.id,
+            },
+          });
+          await transaction.batch.update({
+            where: { id: batchId },
+            data: { status: "voided" },
+          });
+          await transaction.auditLog.create({
+            data: {
+              requestId: request.requestId,
+              actorId: actor.id,
+              action: "VOID_ENTRY",
+              entityType: "incoming_fish",
+              entityId: incomingFish.id,
+              reason: input.reason,
+              ipAddress: request.socket.remoteAddress?.slice(0, 45) ?? null,
+            },
+          });
 
-        const response: CachedResponse = {
-          status: "success",
-          message: "Transaksi penerimaan ikan berhasil di-VOID.",
-          data: {
-            batch_id: batch.id,
-            batch_code: batch.batch_code,
-            status: "voided",
-          },
-        };
-        await transaction.$executeRaw`
+          const response: CachedResponse = {
+            status: "success",
+            message: "Transaksi penerimaan ikan berhasil di-VOID.",
+            data: {
+              batch_id: batch.id,
+              batch_code: batch.batch_code,
+              status: "voided",
+            },
+          };
+          await transaction.$executeRaw`
           UPDATE "idempotency_keys"
           SET "status" = 'completed', "response_status" = 200,
               "response_body" = ${JSON.stringify(response)}::jsonb,
               "completed_at" = CURRENT_TIMESTAMP
           WHERE "id" = ${idempotencyRow.id}::uuid
         `;
-        return response;
-      });
+          return response;
+        },
+        { timeout: this.transactionTimeout },
+      );
 
       return {
         ...body,
