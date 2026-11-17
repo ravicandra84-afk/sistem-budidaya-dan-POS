@@ -110,15 +110,18 @@ describe("V4.5 receiving Zod schema", () => {
 
   it("rejects malformed dates, unsupported sizes, and additional fields", () => {
     expect(
-      receiveFishSchema.safeParse({ ...validReceiving, entry_date: "2026-02-30" })
-        .success,
+      receiveFishSchema.safeParse({
+        ...validReceiving,
+        entry_date: "2026-02-30",
+      }).success,
     ).toBe(false);
     expect(
       receiveFishSchema.safeParse({ ...validReceiving, fish_size: "1-2 cm" })
         .success,
     ).toBe(false);
     expect(
-      receiveFishSchema.safeParse({ ...validReceiving, injected: true }).success,
+      receiveFishSchema.safeParse({ ...validReceiving, injected: true })
+        .success,
     ).toBe(false);
   });
 

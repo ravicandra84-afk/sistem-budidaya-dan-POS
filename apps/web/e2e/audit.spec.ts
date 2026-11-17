@@ -108,12 +108,10 @@ async function openAuditPage(page: Page, role: TestRole) {
   };
 }
 
-for (const role of [
-  "Owner",
-  "Admin Operasional",
-  "Kepala Budidaya",
-] as const) {
-  test(`Audit Log loads for ${role} and renders V4.5 actions`, async ({ page }) => {
+for (const role of ["Owner", "Admin Operasional", "Kepala Budidaya"] as const) {
+  test(`Audit Log loads for ${role} and renders V4.5 actions`, async ({
+    page,
+  }) => {
     const audit = await openAuditPage(page, role);
 
     await expect(
