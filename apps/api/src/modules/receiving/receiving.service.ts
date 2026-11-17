@@ -1,9 +1,11 @@
-import { HttpStatus, Injectable } from "@nestjs/common";
+import { HttpStatus, Inject, Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { ApiException } from "../../common/http/api-exception";
 import { RequestWithId } from "../../common/http/request-id.middleware";
 import { loadApiEnvironment } from "../../config/env";
 import { PrismaService } from "../prisma/prisma.service";
+import { DEPENDENT_TRANSACTION_GUARD } from "./dependent-transaction.guard";
+import type { DependentTransactionGuard } from "./dependent-transaction.guard";
 import { hashBusinessPayload, isUuidV4 } from "./idempotency";
 import { ReceiveFishInput, VoidIncomingFishInput } from "./receiving.schemas";
 
@@ -40,7 +42,11 @@ export class ReceivingService {
   private readonly lockTimeout: string;
   private readonly transactionTimeout: number;
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(DEPENDENT_TRANSACTION_GUARD)
+    private readonly dependentTransactionGuard: DependentTransactionGuard,
+  ) {
     const lockTimeoutMs = loadApiEnvironment().DB_LOCK_TIMEOUT_MS;
     this.lockTimeout = `${lockTimeoutMs}ms`;
     this.transactionTimeout = lockTimeoutMs + 5_000;
@@ -271,6 +277,19 @@ export class ReceivingService {
               409,
               "BATCH_NOT_ACTIVE",
               "Batch tidak berstatus active.",
+            );
+          }
+
+          if (
+            await this.dependentTransactionGuard.hasDependentTransactions(
+              transaction,
+              batchId,
+            )
+          ) {
+            throw new ApiException(
+              409,
+              "HAS_DEPENDENT_TRANSACTIONS",
+              "Batch memiliki transaksi turunan dan tidak dapat di-VOID.",
             );
           }
 

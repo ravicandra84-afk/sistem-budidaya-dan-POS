@@ -23,6 +23,7 @@ export interface BatchItem {
     id: string;
     batch_code: string;
     status: BatchStatus;
+    current_stock: number;
     created_at: string;
   };
   species: SpeciesItem;

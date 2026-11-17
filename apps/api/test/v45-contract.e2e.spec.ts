@@ -6,10 +6,15 @@ import { performance } from "node:perf_hooks";
 import * as jwt from "jsonwebtoken";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
+import {
+  calculateBatchStock,
+  canCompleteBatch,
+} from "../src/modules/batches/batch-stock";
 import { ApiExceptionFilter } from "../src/common/http/api-exception.filter";
 import { configureApiSecurity } from "../src/common/http/security";
 import { loadApiEnvironment } from "../src/config/env";
 import { PrismaService } from "../src/modules/prisma/prisma.service";
+import { DEPENDENT_TRANSACTION_GUARD } from "../src/modules/receiving/dependent-transaction.guard";
 import {
   getLocalTestDatabaseUrl,
   getLocalTestRuntimeDatabaseUrl,
@@ -33,11 +38,21 @@ databaseSuite(
     let kepalaBudidaya: Actor;
     let inactiveOwner: Actor;
     let speciesId: string;
+    const dependentBatchIds = new Set<string>();
+
+    const dependentTransactionGuard = {
+      hasDependentTransactions: async (
+        _transaction: unknown,
+        batchId: string,
+      ) => dependentBatchIds.has(batchId),
+    };
 
     async function createApplication() {
       const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
         .overrideProvider(PrismaService)
         .useValue(runtime)
+        .overrideProvider(DEPENDENT_TRANSACTION_GUARD)
+        .useValue(dependentTransactionGuard)
         .compile();
       const application = moduleRef.createNestApplication();
       application.setGlobalPrefix("api/v1");
@@ -311,6 +326,7 @@ databaseSuite(
     });
 
     it("TC-07 creates 50 unique sequential batches concurrently and reports latency percentiles", async () => {
+      const benchmarkStarted = performance.now();
       const requests = Array.from({ length: 50 }, () => {
         const started = performance.now();
         return createEntry(
@@ -325,6 +341,7 @@ databaseSuite(
         }));
       });
       const results = await Promise.all(requests);
+      const durationMs = performance.now() - benchmarkStarted;
       const latencies = results
         .map((result) => result.latencyMs)
         .sort((a, b) => a - b);
@@ -338,6 +355,10 @@ databaseSuite(
         .sort();
       const metrics = {
         requests: results.length,
+        durationMs: Number(durationMs.toFixed(2)),
+        throughputRequestsPerSecond: Number(
+          (results.length / (durationMs / 1000)).toFixed(2),
+        ),
         p50Ms: percentile(0.5),
         p95Ms: percentile(0.95),
         p99Ms: percentile(0.99),
@@ -600,8 +621,28 @@ databaseSuite(
       expect(response.body.error.code).toBe("INVALID_ENTRY_DATE");
     });
 
-    it.skip("TC-20 blocks receiving VOID when a dependent transaction exists", () => {
-      // BLOCKED: V4.5 schema has no approved dependent-transaction source/table.
+    it("TC-20 blocks receiving VOID when a dependent transaction exists", async () => {
+      const batchId = await createBatchForVoid();
+      dependentBatchIds.add(batchId);
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/fish-entries/${batchId}/void`)
+        .set("Authorization", `Bearer ${token(adminOperasional)}`)
+        .set("Idempotency-Key", randomUUID())
+        .send({ reason: "Batch memiliki transaksi turunan" });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe("HAS_DEPENDENT_TRANSACTIONS");
+      expect(
+        await admin.batch.findUnique({
+          where: { id: batchId },
+          select: { status: true },
+        }),
+      ).toEqual({ status: "active" });
+      const receipt = await admin.incomingFish.findUnique({
+        where: { batchId },
+        include: { void: true },
+      });
+      expect(receipt?.void).toBeNull();
     });
 
     it("TC-21 rejects UPDATE and DELETE on append-only history for runtime access", async () => {
@@ -626,17 +667,43 @@ databaseSuite(
       ).rejects.toThrow();
     });
 
-    it("TC-22 rejects illegal batch status transitions and enum values", async () => {
+    it("TC-22 computes stock and rejects completion while stock remains", async () => {
       const batchId = await createBatchForVoid();
+      const batchResponse = await request(app.getHttpServer())
+        .get(`/api/v1/batches/${batchId}`)
+        .set("Authorization", `Bearer ${token(adminOperasional)}`);
+      const [databaseStock] = await admin.$queryRaw<
+        Array<{ stock: bigint }>
+      >`SELECT "calculate_batch_stock"(${batchId}::uuid) AS "stock"`;
+      const positiveStock = calculateBatchStock({ receivedQuantity: 500 });
+
+      expect(batchResponse.status).toBe(200);
+      expect(batchResponse.body.data.batch.current_stock).toBe(500);
+      expect(Number(databaseStock?.stock)).toBe(positiveStock);
+      expect(canCompleteBatch(positiveStock)).toBe(false);
+      expect(
+        calculateBatchStock({
+          receivedQuantity: 500,
+          validSalesQuantity: 500,
+        }),
+      ).toBe(0);
+      expect(
+        calculateBatchStock({ receivedQuantity: 500, receiptVoided: true }),
+      ).toBe(0);
+      expect(canCompleteBatch(0)).toBe(true);
+
+      await expect(
+        admin.$executeRaw`UPDATE "batches" SET "status" = 'completed' WHERE "id" = ${batchId}::uuid`,
+      ).rejects.toThrow();
+      await expect(
+        admin.$executeRaw`UPDATE "batches" SET "status" = 'unknown' WHERE "id" = ${batchId}::uuid`,
+      ).rejects.toThrow();
       await admin.batch.update({
         where: { id: batchId },
         data: { status: "voided" },
       });
       await expect(
         admin.$executeRaw`UPDATE "batches" SET "status" = 'active' WHERE "id" = ${batchId}::uuid`,
-      ).rejects.toThrow();
-      await expect(
-        admin.$executeRaw`UPDATE "batches" SET "status" = 'unknown' WHERE "id" = ${batchId}::uuid`,
       ).rejects.toThrow();
     });
 
@@ -683,9 +750,77 @@ databaseSuite(
       expect(response.status).toBe(400);
     });
 
-    it.skip("TC-28 serializes VOID against insertion of a dependent transaction", () => {
-      // BLOCKED: no dependent-transaction table/module exists before the POS gate.
-    });
+    it("TC-28 serializes VOID against insertion of a dependent transaction", async () => {
+      const batchId = await createBatchForVoid();
+      let signalBatchLock: () => void = () => undefined;
+      let releaseBatchLock: () => void = () => undefined;
+      const batchLocked = new Promise<void>((resolve) => {
+        signalBatchLock = resolve;
+      });
+      const releaseWriter = new Promise<void>((resolve) => {
+        releaseBatchLock = resolve;
+      });
+      const dependentWriter = admin.$transaction(
+        async (transaction) => {
+          const [batch] = await transaction.$queryRaw<
+            Array<{ status: string }>
+          >`SELECT "status" FROM "batches" WHERE "id" = ${batchId}::uuid FOR UPDATE`;
+          expect(batch?.status).toBe("active");
+          signalBatchLock();
+          await releaseWriter;
+          dependentBatchIds.add(batchId);
+        },
+        { timeout: 15_000 },
+      );
+
+      await batchLocked;
+      const voidResponse = request(app.getHttpServer())
+        .post(`/api/v1/fish-entries/${batchId}/void`)
+        .set("Authorization", `Bearer ${token(adminOperasional)}`)
+        .set("Idempotency-Key", randomUUID())
+        .send({ reason: "VOID concorrente" })
+        .then((response) => response);
+
+      try {
+        const deadline = Date.now() + 5_000;
+        let voidWaitingOnBatchLock = false;
+        while (Date.now() < deadline && !voidWaitingOnBatchLock) {
+          const [activity] = await admin.$queryRaw<Array<{ waiting: boolean }>>`
+            SELECT EXISTS (
+              SELECT 1 FROM pg_stat_activity
+              WHERE wait_event_type = 'Lock'
+                AND query ILIKE '%batches%'
+                AND query ILIKE '%FOR UPDATE%'
+                AND pid <> pg_backend_pid()
+            ) AS waiting
+          `;
+          voidWaitingOnBatchLock = activity?.waiting ?? false;
+          if (!voidWaitingOnBatchLock) {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          }
+        }
+        expect(voidWaitingOnBatchLock).toBe(true);
+      } finally {
+        dependentBatchIds.add(batchId);
+        releaseBatchLock();
+      }
+
+      await dependentWriter;
+      const response = await voidResponse;
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe("HAS_DEPENDENT_TRANSACTIONS");
+      expect(
+        await admin.batch.findUnique({
+          where: { id: batchId },
+          select: { status: true },
+        }),
+      ).toEqual({ status: "active" });
+      const receipt = await admin.incomingFish.findUnique({
+        where: { batchId },
+        include: { void: true },
+      });
+      expect(receipt?.void).toBeNull();
+    }, 20_000);
 
     it("TC-29 returns one cached result for concurrent identical VOID retries", async () => {
       const batchId = await createBatchForVoid();

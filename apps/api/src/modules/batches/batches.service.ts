@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { BatchListQuery } from "@pfi/shared";
 import { ApiException } from "../../common/http/api-exception";
 import { PrismaService } from "../prisma/prisma.service";
+import { calculateBatchStock } from "./batch-stock";
 
 @Injectable()
 export class BatchesService {
@@ -43,6 +44,10 @@ export class BatchesService {
             id: batch.id,
             batch_code: batch.batchCode,
             status: batch.status,
+            current_stock: calculateBatchStock({
+              receivedQuantity: batch.incomingFish?.quantity ?? 0,
+              receiptVoided: batch.incomingFish?.void !== null,
+            }),
             created_at: batch.createdAt.toISOString(),
           },
           species: {
@@ -83,6 +88,10 @@ export class BatchesService {
           id: batch.id,
           batch_code: batch.batchCode,
           status: batch.status,
+          current_stock: calculateBatchStock({
+            receivedQuantity: batch.incomingFish?.quantity ?? 0,
+            receiptVoided: batch.incomingFish?.void !== null,
+          }),
           created_at: batch.createdAt.toISOString(),
         },
         species: {

@@ -1,6 +1,7 @@
 import { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { Prisma } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import * as jwt from "jsonwebtoken";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
@@ -64,6 +65,60 @@ describe("V4.5 core API HTTP integration", () => {
       subject,
     });
   }
+
+  const protectedEndpointRequests = (token: string | (() => string)) => {
+    const authorization = () =>
+      `Bearer ${typeof token === "function" ? token() : token}`;
+
+    return [
+      {
+        name: "GET /fish-species",
+        send: () =>
+          request(app.getHttpServer())
+            .get("/api/v1/fish-species")
+            .set("Authorization", authorization()),
+      },
+      {
+        name: "GET /batches",
+        send: () =>
+          request(app.getHttpServer())
+            .get("/api/v1/batches")
+            .set("Authorization", authorization()),
+      },
+      {
+        name: "GET /batches/{id}",
+        send: () =>
+          request(app.getHttpServer())
+            .get(`/api/v1/batches/${batchId}`)
+            .set("Authorization", authorization()),
+      },
+      {
+        name: "GET /audit-logs",
+        send: () =>
+          request(app.getHttpServer())
+            .get("/api/v1/audit-logs")
+            .set("Authorization", authorization()),
+      },
+      {
+        name: "POST /fish-entries",
+        send: () =>
+          request(app.getHttpServer())
+            .post("/api/v1/fish-entries")
+            .set("Authorization", authorization())
+            .set("Idempotency-Key", randomUUID())
+            .send(receiptInput),
+      },
+      {
+        name: "POST /fish-entries/{batch_id}/void",
+        send: () =>
+          request(app.getHttpServer())
+            .post(`/api/v1/fish-entries/${batchId}/void`)
+            .set("Authorization", authorization())
+            .set("Idempotency-Key", randomUUID())
+            .send({ reason: "Uji akses RBAC" }),
+      },
+    ];
+  };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
@@ -149,6 +204,127 @@ describe("V4.5 core API HTTP integration", () => {
   afterAll(async () => {
     await app.close();
   });
+
+  it.each(["Owner", "Admin Operasional", "Kepala Budidaya"])(
+    "%s follows the V4.5 endpoint authorization matrix",
+    async (role) => {
+      prismaMock.user.findUnique.mockResolvedValue({
+        id: actorId,
+        name: `${role} Test`,
+        email: "user@pfi.test",
+        role,
+        isActive: true,
+      });
+      prismaMock.fishSpecies.findMany.mockResolvedValue([]);
+      prismaMock.batch.count.mockResolvedValue(0);
+      prismaMock.batch.findMany.mockResolvedValue([]);
+      prismaMock.batch.findUnique.mockResolvedValue({
+        id: batchId,
+        batchCode: "PFI-BCH-20261115-005",
+        status: "active",
+        createdAt: new Date("2026-11-15T10:00:00.000Z"),
+        species: { id: speciesId, speciesCode: "LELE", speciesName: "Lele" },
+        incomingFish: null,
+      });
+      prismaMock.auditLog.count.mockResolvedValue(0);
+      prismaMock.auditLog.findMany.mockResolvedValue([]);
+
+      const token = accessToken(role);
+      const endpoints = protectedEndpointRequests(token);
+      const readResponses = await Promise.all(
+        endpoints.slice(0, 4).map(({ send }) => send()),
+      );
+      const createResponse = await endpoints[4]!.send();
+      const transactionsBeforeVoid = prismaMock.$transaction.mock.calls.length;
+      const voidResponse = await endpoints[5]!.send();
+
+      expect(readResponses.map(({ status }) => status)).toEqual([
+        200, 200, 200, 200,
+      ]);
+      expect(createResponse.status).toBe(201);
+      if (role === "Kepala Budidaya") {
+        expect(voidResponse.status).toBe(403);
+        expect(voidResponse.body.error.code).toBe("FORBIDDEN");
+        expect(prismaMock.$transaction).toHaveBeenCalledTimes(
+          transactionsBeforeVoid,
+        );
+        expect(prismaMock.auditLog.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { action: { in: ["CREATE_ENTRY", "VOID_ENTRY"] } },
+          }),
+        );
+      } else {
+        expect(voidResponse.status).toBe(200);
+        expect(prismaMock.auditLog.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ where: {} }),
+        );
+      }
+    },
+  );
+
+  it("returns FORBIDDEN when Kepala Budidaya attempts receiving VOID", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: actorId,
+      name: "Kepala Budidaya Test",
+      email: "kepala@pfi.test",
+      role: "Kepala Budidaya",
+      isActive: true,
+    });
+
+    const response = await protectedEndpointRequests(
+      accessToken("Kepala Budidaya"),
+    )[5]!.send();
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe("FORBIDDEN");
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it.each(protectedEndpointRequests("matrix-token"))(
+    "$name rejects an invalid JWT",
+    async ({ send }) => {
+      const response = await send();
+
+      expect(response.status).toBe(401);
+      expect(response.body.error.code).toBe("UNAUTHORIZED");
+    },
+  );
+
+  it.each(protectedEndpointRequests(() => accessToken("Owner")))(
+    "$name rejects an inactive account",
+    async ({ send }) => {
+      prismaMock.user.findUnique.mockResolvedValue({
+        id: actorId,
+        name: "Nonaktif Test",
+        email: "inactive@pfi.test",
+        role: "Owner",
+        isActive: false,
+      });
+
+      const response = await send();
+
+      expect(response.status).toBe(401);
+      expect(response.body.error.code).toBe("UNAUTHORIZED");
+    },
+  );
+
+  it.each(protectedEndpointRequests(() => accessToken("Kasir")))(
+    "$name rejects Kasir because it is not a V4.5 role",
+    async ({ send }) => {
+      prismaMock.user.findUnique.mockResolvedValue({
+        id: actorId,
+        name: "Kasir Test",
+        email: "kasir@pfi.test",
+        role: "Kasir",
+        isActive: true,
+      });
+
+      const response = await send();
+
+      expect(response.status).toBe(401);
+      expect(response.body.error.code).toBe("UNAUTHORIZED");
+    },
+  );
 
   it("protects species list and returns active species for authorized V4.5 roles", async () => {
     prismaMock.fishSpecies.findMany.mockResolvedValue([

@@ -126,21 +126,21 @@ Di dalam layanan Backend REST API, struktur kode dipisahkan menjadi empat lapisa
 
 Sistem mengenali empat role utama: `Owner`, `Admin Operasional`, `Kepala Budidaya`, dan `Kasir`.
 
-| Fitur / Operasi Sistem                          |      `Owner`      |   `Admin Operasional`   |              `Kepala Budidaya`              |          `Kasir`          | Status Aturan                                   |
-| ----------------------------------------------- | :---------------: | :---------------------: | :-----------------------------------------: | :-----------------------: | ----------------------------------------------- |
-| **Melihat Data Penerimaan & Batch**             |     Diizinkan     |        Diizinkan        |                  Diizinkan                  |          Ditolak          | `LOCKED — V4.5`                                 |
-| **Membuat Penerimaan Ikan (`POST`)**            |      Ditolak      |        Diizinkan        |                  Diizinkan                  |          Ditolak          | `LOCKED — V4.5`                                 |
-| **Melakukan VOID Penerimaan (`POST`)**          |      Ditolak      |        Diizinkan        |                   Ditolak                   |          Ditolak          | `LOCKED — V4.5`                                 |
-| **Mengelola Master Spesies (API/UI)**           |      Ditolak      | Ditolak _(Via DB Seed)_ |                   Ditolak                   |          Ditolak          | `LOCKED — V4.5`                                 |
-| **Melihat Laporan Audit Log**                   | Diizinkan (Semua) |    Diizinkan (Semua)    | Diizinkan _(Khusus Modul Penerimaan/Batch)_ | **Ditolak (`Forbidden`)** | `LOCKED — V4.5` + `APPROVED — OWNER` (`TBD-07`) |
-| **Mengakses Halaman Kasir / POS**               |     Diizinkan     |        Diizinkan        |                   Ditolak                   |         Diizinkan         | `LOCKED — BUSINESS`                             |
-| **Melihat Seluruh Transaksi Penjualan**         |     Diizinkan     |        Diizinkan        |                   Ditolak                   |         Diizinkan         | `LOCKED — BUSINESS`                             |
-| **Membuat Transaksi Penjualan**                 |     Diizinkan     |        Diizinkan        |                   Ditolak                   |         Diizinkan         | `LOCKED — BUSINESS`                             |
-| **Melakukan VOID Penjualan (Utuh)**             |     Diizinkan     |        Diizinkan        |                   Ditolak                   |         Diizinkan         | `LOCKED — BUSINESS`                             |
-| **Menambah / Mengubah Daftar Harga**            |     Diizinkan     |        Diizinkan        |                   Ditolak                   |          Ditolak          | `LOCKED — BUSINESS`                             |
-| **Menghapus Daftar Harga**                      |      Ditolak      |         Ditolak         |                   Ditolak                   |          Ditolak          | `LOCKED — BUSINESS`                             |
-| **Cetak Ulang Struk (Milik Sendiri, Non-VOID)** |     Diizinkan     |        Diizinkan        |                   Ditolak                   |         Diizinkan         | `LOCKED — BUSINESS`                             |
-| **Cetak Ulang Struk (Milik Pengguna Lain)**     |      Ditolak      |         Ditolak         |                   Ditolak                   |          Ditolak          | `LOCKED — BUSINESS`                             |
+| Fitur / Operasi Sistem                          |      `Owner`      |   `Admin Operasional`   |              `Kepala Budidaya`              |          `Kasir`          | Status Aturan                                     |
+| ----------------------------------------------- | :---------------: | :---------------------: | :-----------------------------------------: | :-----------------------: | ------------------------------------------------- |
+| **Melihat Data Penerimaan & Batch**             |     Diizinkan     |        Diizinkan        |                  Diizinkan                  |          Ditolak          | `LOCKED — V4.5`                                   |
+| **Membuat Penerimaan Ikan (`POST`)**            |     Diizinkan     |        Diizinkan        |                  Diizinkan                  |          Ditolak          | `LOCKED — V4.5`, Owner-approved update 2026-11-17 |
+| **Melakukan VOID Penerimaan (`POST`)**          |     Diizinkan     |        Diizinkan        |                   Ditolak                   |          Ditolak          | `LOCKED — V4.5`, Owner-approved update 2026-11-17 |
+| **Mengelola Master Spesies (API/UI)**           |      Ditolak      | Ditolak _(Via DB Seed)_ |                   Ditolak                   |          Ditolak          | `LOCKED — V4.5`                                   |
+| **Melihat Laporan Audit Log**                   | Diizinkan (Semua) |    Diizinkan (Semua)    | Diizinkan _(Khusus Modul Penerimaan/Batch)_ | **Ditolak (`Forbidden`)** | `LOCKED — V4.5` + `APPROVED — OWNER` (`TBD-07`)   |
+| **Mengakses Halaman Kasir / POS**               |     Diizinkan     |        Diizinkan        |                   Ditolak                   |         Diizinkan         | `LOCKED — BUSINESS`                               |
+| **Melihat Seluruh Transaksi Penjualan**         |     Diizinkan     |        Diizinkan        |                   Ditolak                   |         Diizinkan         | `LOCKED — BUSINESS`                               |
+| **Membuat Transaksi Penjualan**                 |     Diizinkan     |        Diizinkan        |                   Ditolak                   |         Diizinkan         | `LOCKED — BUSINESS`                               |
+| **Melakukan VOID Penjualan (Utuh)**             |     Diizinkan     |        Diizinkan        |                   Ditolak                   |         Diizinkan         | `LOCKED — BUSINESS`                               |
+| **Menambah / Mengubah Daftar Harga**            |     Diizinkan     |        Diizinkan        |                   Ditolak                   |          Ditolak          | `LOCKED — BUSINESS`                               |
+| **Menghapus Daftar Harga**                      |      Ditolak      |         Ditolak         |                   Ditolak                   |          Ditolak          | `LOCKED — BUSINESS`                               |
+| **Cetak Ulang Struk (Milik Sendiri, Non-VOID)** |     Diizinkan     |        Diizinkan        |                   Ditolak                   |         Diizinkan         | `LOCKED — BUSINESS`                               |
+| **Cetak Ulang Struk (Milik Pengguna Lain)**     |      Ditolak      |         Ditolak         |                   Ditolak                   |          Ditolak          | `LOCKED — BUSINESS`                               |
 
 ### 3.3 Keamanan Lapisan Database (Least Privilege & Immutability)
 

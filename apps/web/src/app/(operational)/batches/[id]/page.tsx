@@ -190,6 +190,11 @@ export default function BatchDetailPage() {
         <DetailValue label="Status batch">
           <StatusBadge status={detail.batch.status as BatchStatus} />
         </DetailValue>
+        <DetailValue label="Stok saat ini">
+          <span className="tabular-nums font-semibold">
+            {formatInteger(detail.batch.current_stock)} ekor
+          </span>
+        </DetailValue>
         <DetailValue label="Kode batch">
           <span className="font-mono tabular-nums text-sm font-semibold">
             {detail.batch.batch_code}
@@ -261,12 +266,10 @@ export default function BatchDetailPage() {
             </DetailValue>
           </div>
           {detail.batch.status === "active" &&
-          session?.user.role !== "Owner" &&
-          session?.user.role !== "Admin Operasional" ? (
+          session?.user.role === "Kepala Budidaya" ? (
             <p className="mt-3 flex items-center gap-2 text-xs text-slate-500">
               <ShieldCheck className="size-4" aria-hidden="true" />
-              VOID penerimaan hanya dapat dilakukan Owner atau Admin
-              Operasional.
+              VOID penerimaan tidak tersedia untuk Kepala Budidaya.
             </p>
           ) : null}
         </section>

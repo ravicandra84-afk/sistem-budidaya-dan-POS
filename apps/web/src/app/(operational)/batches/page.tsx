@@ -211,6 +211,7 @@ export default function BatchesPage() {
                     <th className="px-4 py-3">Spesies / ukuran</th>
                     <th className="px-4 py-3">Tanggal masuk</th>
                     <th className="px-4 py-3 text-right">Jumlah awal</th>
+                    <th className="px-4 py-3 text-right">Stok saat ini</th>
                     <th className="px-4 py-3 text-right">Modal beli</th>
                     <th className="px-4 py-3 text-right">Ongkos kirim</th>
                     <th className="px-4 py-3 text-right">Berat / 500</th>
@@ -251,6 +252,9 @@ export default function BatchesPage() {
                         {item.incoming_fish
                           ? `${formatInteger(item.incoming_fish.quantity)} ekor`
                           : "—"}
+                      </td>
+                      <td className="px-4 py-3.5 text-right tabular-nums font-semibold">
+                        {formatInteger(item.batch.current_stock)} ekor
                       </td>
                       <td className="px-4 py-3.5 text-right tabular-nums text-slate-700">
                         {item.incoming_fish
