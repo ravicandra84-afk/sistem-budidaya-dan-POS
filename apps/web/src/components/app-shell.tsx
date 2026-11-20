@@ -1,6 +1,13 @@
 "use client";
 
-import { Fish, LogOut, Plus, ScrollText } from "lucide-react";
+import {
+  Fish,
+  LogOut,
+  Plus,
+  ScrollText,
+  ShoppingCart,
+  Tag,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect } from "react";
@@ -44,6 +51,15 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const navigation = [
     { href: "/batches", label: "Batch & penerimaan", Icon: Fish },
+    ...(session.user.role === "Owner" ||
+    session.user.role === "Admin Operasional" ||
+    session.user.role === "Kasir"
+      ? [{ href: "/pos", label: "POS / Kasir", Icon: ShoppingCart }]
+      : []),
+    ...(session.user.role === "Owner" ||
+    session.user.role === "Admin Operasional"
+      ? [{ href: "/pos/prices", label: "Daftar harga", Icon: Tag }]
+      : []),
     ...(session.user.role === "Admin Operasional" ||
     session.user.role === "Kepala Budidaya"
       ? [{ href: "/batches/new", label: "Penerimaan baru", Icon: Plus }]
@@ -52,6 +68,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   ];
 
   function isActive(href: string) {
+    if (href === "/pos") return pathname === "/pos";
     return href === "/batches"
       ? pathname === "/batches" || /^\/batches\/[^/]+$/.test(pathname)
       : pathname === href || pathname.startsWith(`${href}/`);

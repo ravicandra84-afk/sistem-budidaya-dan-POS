@@ -10,6 +10,7 @@ export class ApiClientError extends Error {
     message: string,
     readonly status: number,
     readonly code: string,
+    readonly details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "ApiClientError";
@@ -53,7 +54,7 @@ export async function apiRequest<TData>(
 
   const payload = (await response.json().catch(() => null)) as {
     message?: string;
-    error?: { code?: string };
+    error?: { code?: string; details?: Record<string, unknown> };
     data?: TData;
     status?: "success";
     meta?: Record<string, unknown>;
@@ -71,6 +72,7 @@ export async function apiRequest<TData>(
       payload?.message ?? "Permintaan tidak dapat diproses.",
       response.status,
       payload?.error?.code ?? "INVALID_RESPONSE",
+      payload?.error?.details,
     );
   }
 

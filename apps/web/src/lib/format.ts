@@ -5,6 +5,12 @@ const currencyFormatter = new Intl.NumberFormat("id-ID", {
   maximumFractionDigits: 2,
 });
 
+const posCurrencyFormatter = new Intl.NumberFormat("id-ID", {
+  style: "currency",
+  currency: "IDR",
+  maximumFractionDigits: 0,
+});
+
 const integerFormatter = new Intl.NumberFormat("id-ID", {
   maximumFractionDigits: 0,
 });
@@ -27,6 +33,10 @@ const dateTimeFormatter = new Intl.DateTimeFormat("id-ID", {
 
 export function formatRupiah(value: string | number): string {
   return currencyFormatter.format(Number(value));
+}
+
+export function formatPosRupiah(value: number): string {
+  return posCurrencyFormatter.format(value);
 }
 
 export function formatInteger(value: number): string {
