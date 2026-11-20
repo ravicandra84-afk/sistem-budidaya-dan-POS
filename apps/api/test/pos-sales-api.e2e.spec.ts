@@ -805,6 +805,19 @@ databaseSuite("POS create-sale HTTP integration", () => {
 
   it("creates a fully confirmed transfer sale with no cash fields", async () => {
     const fixture = await createFixture("Kasir");
+    const unconfirmed = await postSale(fixture, {
+      batch_id: fixture.batchId,
+      quantity: 4,
+      expected_unit_price: 2500,
+      payment_method: "transfer",
+      transfer_confirmed: false,
+    });
+    expect(unconfirmed.status).toBe(400);
+    expect(unconfirmed.body.error.code).toBe("INVALID_PAYLOAD");
+    expect(
+      await admin.fishSale.count({ where: { batchId: fixture.batchId } }),
+    ).toBe(0);
+
     const response = await postSale(fixture, {
       batch_id: fixture.batchId,
       quantity: 4,
@@ -873,6 +886,113 @@ databaseSuite("POS create-sale HTTP integration", () => {
     expect(JSON.stringify(shortCashResponse.body)).not.toMatch(
       /Prisma|SELECT|postgres/i,
     );
+  });
+
+  it("accepts quantity one with exact cash and rejects quantity beyond current stock", async () => {
+    const minimum = await createFixture("Kasir", { stock: 1 });
+    const exactCash = await postSale(
+      minimum,
+      cashPayload(minimum.batchId, {
+        quantity: 1,
+        cash_received: 2500,
+      }),
+    );
+
+    expect(exactCash.status).toBe(201);
+    expect(exactCash.body.data.sale).toMatchObject({
+      quantity: 1,
+      total_amount: 2500,
+      cash_received: 2500,
+      change_amount: 0,
+    });
+    expect(
+      await admin.batch.findUniqueOrThrow({ where: { id: minimum.batchId } }),
+    ).toMatchObject({ status: "completed" });
+
+    const limitedStock = await createFixture("Kasir", { stock: 3 });
+    const stockConflictKey = randomUUID();
+    const excessiveQuantity = await postSale(
+      limitedStock,
+      cashPayload(limitedStock.batchId, {
+        quantity: 4,
+        cash_received: 10000,
+      }),
+      stockConflictKey,
+    );
+    expect(excessiveQuantity.status).toBe(409);
+    expect(excessiveQuantity.body.error.code).toBe("INSUFFICIENT_STOCK");
+    expect(excessiveQuantity.body.error.details).toEqual({
+      available_quantity: 3,
+    });
+    expect(
+      await admin.fishSale.count({ where: { batchId: limitedStock.batchId } }),
+    ).toBe(0);
+    expect(
+      await admin.idempotencyKey.count({
+        where: {
+          userId: limitedStock.user.id,
+          endpoint,
+          idempotencyKey: stockConflictKey,
+        },
+      }),
+    ).toBe(0);
+  });
+
+  it("rejects sale creation on a voided batch through the POS API", async () => {
+    const fixture = await createFixture("Kasir", { stock: 10 });
+    await admin.batch.update({
+      where: { id: fixture.batchId },
+      data: { status: "voided" },
+    });
+
+    const response = await postSale(
+      fixture,
+      cashPayload(fixture.batchId, { quantity: 1, cash_received: 2500 }),
+    );
+
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe("BATCH_NOT_ACTIVE");
+    expect(
+      await admin.fishSale.count({ where: { batchId: fixture.batchId } }),
+    ).toBe(0);
+  });
+
+  it("serializes two Kasir HTTP sales on one batch without overselling", async () => {
+    const firstKasir = await createFixture("Kasir", { stock: 100 });
+    const secondActor = await createActor("Kasir");
+    const secondKasir = { ...firstKasir, user: secondActor };
+    const payload = cashPayload(firstKasir.batchId, {
+      quantity: 60,
+      cash_received: 150000,
+    });
+
+    const responses = await Promise.all([
+      postSale(firstKasir, payload),
+      postSale(secondKasir, payload),
+    ]);
+    const successful = responses.filter((response) => response.status === 201);
+    const rejected = responses.filter((response) => response.status === 409);
+
+    expect(successful).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]?.body.error.code).toBe("INSUFFICIENT_STOCK");
+    expect(rejected[0]?.body.error.details).toEqual({
+      available_quantity: 40,
+    });
+    expect(
+      await admin.fishSale.count({ where: { batchId: firstKasir.batchId } }),
+    ).toBe(1);
+    expect(
+      await admin.$queryRaw<Array<{ current_stock: bigint }>>`
+        SELECT "calculate_batch_stock"(${firstKasir.batchId}::uuid) AS current_stock
+      `,
+    ).toEqual([{ current_stock: 40n }]);
+    expect(
+      await admin.batch.findUniqueOrThrow({
+        where: { id: firstKasir.batchId },
+        select: { status: true },
+      }),
+    ).toEqual({ status: "active" });
   });
 
   it("rolls back sale, sequence, and idempotency when required audit insertion fails", async () => {

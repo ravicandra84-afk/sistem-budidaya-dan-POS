@@ -2,7 +2,7 @@
 
 - Status: APPROVED — OWNER
 - Scope: UI flow/design handoff and approved browser-print baseline for PG-07 through PG-10.
-- Physical printer status: NOT TESTED; verification is explicitly deferred to the end-of-Phase-8 P8-04 acceptance activity.
+- Physical printer status: UNVERIFIED — PENDING PHYSICAL DEVICE TEST.
 - Normative business/API sources: [ADR 0002](adr/0002-pos-gate-architecture.md), [POS API Contract](pos-api-contract.md), and `prd.md`.
 
 This document closes the GPOS-04 design/integration decision deliverable. It
@@ -175,3 +175,88 @@ Record one result per tested combination:
 
 P8-04 passes only when every combination claimed as supported has evidence at
 both paper widths and no prohibited receipt fields are printed.
+
+## 7. P8-04 QA and Physical Device Status — 2026-11-20
+
+- UI and role E2E: PASS. The complete web Playwright suite passed 37/37 tests,
+  including detail, full-sale VOID, conflict refresh, creator-only reprint,
+  responsive 390 px layout, and the nine-field receipt preview.
+- Build gates: PASS. `npm run typecheck`, `npm run lint`, and
+  `npm run build` completed successfully.
+- Print-layout simulation: PASS for browser `print` media at both 58 mm and
+  80 mm widths. The automated test confirms the selected page layout, hidden
+  controls/application shell, nine approved receipt fields, and no horizontal
+  content overflow in the emulated print surface.
+- Physical pairing and print output: NOT RUN. No device/OS/browser/printer
+  combination was physically paired or printed during this QA session. CSS
+  emulation and a successful build do not establish physical compatibility.
+- Compatibility claim: none. Every physical device and printer combination
+  remains `UNVERIFIED — PENDING PHYSICAL DEVICE TEST` until its actual output
+  is recorded below with evidence.
+
+| Device / OS | Browser    | Printer / connection | Paper | Result                                    | Evidence                    |
+| ----------- | ---------- | -------------------- | ----- | ----------------------------------------- | --------------------------- |
+| Not tested  | Not tested | Not tested           | 58 mm | UNVERIFIED — PENDING PHYSICAL DEVICE TEST | Pending P8-04 physical test |
+| Not tested  | Not tested | Not tested           | 80 mm | UNVERIFIED — PENDING PHYSICAL DEVICE TEST | Pending P8-04 physical test |
+
+## 8. Final Receipt Print Compatibility Matrix — 2026-11-20
+
+This matrix separates automated CSS print simulation from actual printer
+compatibility. Passing Playwright or browser `print` media checks verifies
+only the rendered CSS and receipt DOM; it is not evidence that a physical
+printer, connection, OS, or browser combination works.
+
+### Automated CSS Print Simulation
+
+| Engine / test evidence                                                                                                        | Paper                  | Status                                       | Verified scope                                                                                                                                   |
+| ----------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Chromium / Playwright; P8-04 `pos-sale-detail.spec.ts` (37/37 web E2E) and P9-01 `pos-receipt-layout.spec.ts` (38/38 web E2E) | 58 mm                  | VERIFIED — SIMULATED CSS ONLY                | Nine-field receipt content, selected CSS page width, hidden app shell/controls, and no horizontal overflow in emulated `print` media.            |
+| Chromium / Playwright; P8-04 `pos-sale-detail.spec.ts` (37/37 web E2E) and P9-01 `pos-receipt-layout.spec.ts` (38/38 web E2E) | 80 mm                  | VERIFIED — SIMULATED CSS ONLY                | Nine-field receipt content, selected CSS page width, hidden app shell/controls, and no horizontal overflow in emulated `print` media.            |
+| Chromium / Playwright; P9-02 `pos-print-workflow.spec.ts` (41/41 web E2E)                                                     | 58 mm / 80 mm selector | PASS — WINDOW.PRINT WORKFLOW SIMULATION ONLY | Auto-print invocation after commit, synchronous print failure handling, and local retry without a second sale POST; no physical output verified. |
+
+Evidence files: [P8-04 sale-detail tests](../apps/web/e2e/pos-sale-detail.spec.ts),
+[P9-01 receipt-layout test](../apps/web/e2e/pos-receipt-layout.spec.ts), and
+[P9-02 print-workflow tests](../apps/web/e2e/pos-print-workflow.spec.ts).
+
+### Physical Device / Printer Compatibility
+
+No device was paired and no receipt was physically printed for this matrix.
+Every combination below is `UNVERIFIED — NOT SUPPORTED WITHOUT PHYSICAL TEST`.
+The status may change only after the actual model, OS/browser versions,
+connection, paper width, output checks, dated evidence, and tester signature
+are recorded for that exact combination.
+
+| Device  | OS / browser                         | Connection path to test                                        | Paper | Status                                           | Evidence / tester signature   |
+| ------- | ------------------------------------ | -------------------------------------------------------------- | ----- | ------------------------------------------------ | ----------------------------- |
+| Desktop | Pop!\_OS; browser/version not tested | USB through CUPS or installed OS printer driver                | 58 mm | UNVERIFIED — NOT SUPPORTED WITHOUT PHYSICAL TEST | Not tested; signature pending |
+| Desktop | Pop!\_OS; browser/version not tested | USB through CUPS or installed OS printer driver                | 80 mm | UNVERIFIED — NOT SUPPORTED WITHOUT PHYSICAL TEST | Not tested; signature pending |
+| Desktop | Windows; browser/version not tested  | USB through installed OS printer driver                        | 58 mm | UNVERIFIED — NOT SUPPORTED WITHOUT PHYSICAL TEST | Not tested; signature pending |
+| Desktop | Windows; browser/version not tested  | USB through installed OS printer driver                        | 80 mm | UNVERIFIED — NOT SUPPORTED WITHOUT PHYSICAL TEST | Not tested; signature pending |
+| Mobile  | Android; browser/version not tested  | OS system print dialog; Bluetooth only if exposed by OS/driver | 58 mm | UNVERIFIED — NOT SUPPORTED WITHOUT PHYSICAL TEST | Not tested; signature pending |
+| Mobile  | Android; browser/version not tested  | OS system print dialog; Bluetooth only if exposed by OS/driver | 80 mm | UNVERIFIED — NOT SUPPORTED WITHOUT PHYSICAL TEST | Not tested; signature pending |
+| Mobile  | iOS; browser/version not tested      | OS system print dialog; Bluetooth only if exposed by OS/driver | 58 mm | UNVERIFIED — NOT SUPPORTED WITHOUT PHYSICAL TEST | Not tested; signature pending |
+| Mobile  | iOS; browser/version not tested      | OS system print dialog; Bluetooth only if exposed by OS/driver | 80 mm | UNVERIFIED — NOT SUPPORTED WITHOUT PHYSICAL TEST | Not tested; signature pending |
+
+### Connection and Browser Limits
+
+The supported architectural path is the operating system's system print
+dialog, using a USB printer exposed through CUPS or a printer driver already
+installed in the OS, for either paper width. The application does not implement
+a printer protocol or Bluetooth pairing. Bluetooth printing is not universally
+supported and is not claimed for any device.
+
+The browser `window.print()` API returns no reliable physical job result. The
+application can detect a missing print function or a synchronous exception,
+but cannot detect paper-out, an offline printer, a clipped physical page, or a
+cashier cancelling the OS print dialog. Those outcomes remain subject to
+physical verification and cashier inspection.
+
+### Cashier Procedure
+
+1. After the system print dialog runs, verify the paper width and inspect the
+   physical receipt for all nine fields, legibility, and clipping.
+2. If the receipt did not print or is clipped, use **Coba Cetak Ulang** on the
+   successful checkout receipt, or **Cetak Ulang Struk** on
+   `/pos/sales/[id]` for the original creator of an active sale.
+3. Retrying print uses the existing receipt and must not repeat the sale POST.
+   A VOID sale cannot be reprinted.

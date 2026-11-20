@@ -939,6 +939,8 @@ Gate dinyatakan lulus hanya jika:
 
 ## Task P9-03 — Konsolidasikan compatibility matrix hasil P8-04
 
+**Status: DONE.** [Compatibility Matrix Final Cetak Struk POS (58 mm & 80 mm)](docs/gpos-04-ui-and-print-spec.md) memisahkan simulasi CSS Playwright yang terverifikasi dari semua kombinasi fisik yang berstatus `UNVERIFIED — NOT SUPPORTED WITHOUT PHYSICAL TEST`. Tidak ada klaim kompatibilitas printer atau Bluetooth tanpa uji dan tanda tangan bukti aktual.
+
 **Pekerjaan:**
 
 - Konsolidasikan bukti fisik per kombinasi perangkat/OS/browser/printer dan lebar kertas yang dicatat pada P8-04.
@@ -950,6 +952,14 @@ Gate dinyatakan lulus hanya jika:
 **Acceptance criteria:** setiap kombinasi yang dinyatakan didukung memiliki hasil fisik P8-04 pada lebar yang dinyatakan; jangan mengklaim kompatibilitas universal Bluetooth.
 
 ## Task P9-04 — Jalankan QA POS
+
+**Status: DONE — 2026-11-20.**
+
+- Quality gates: typecheck, lint, build PASS; API 14/14 suite dan 176/176 test PASS (termasuk TC-01 s.d. TC-32); web E2E 41/41 PASS.
+- Cakupan P9-04 terverifikasi: harga hilang/berubah; batas quantity, stok kurang, batch completed/voided; Tunai kurang/pas/kembalian; Transfer dengan dan tanpa konfirmasi; idempotency retry/mismatch (`IDEMPOTENCY_MISMATCH` sesuai kontrak); dua Kasir HTTP paralel; VOID/restore/repeat; RBAC empat role; auto-print/reprint dan error print terisolasi; sequence `1000`.
+- Database: test resolver dan semua suite menunjuk `pfi_test`; 12 tabel data terverifikasi 0 rows setelah test. Automated test runner tidak menggunakan `pfi_db`.
+- Security/dependency audit: `npm audit --omit=dev` menemukan 3 advisories high pada dependency path `prisma` → `@prisma/config` → `effect`. Tidak menjalankan `npm audit fix --force` karena solusi yang ditawarkan npm melakukan downgrade Prisma yang breaking.
+- Release readiness: belum siap klaim dukungan printer fisik. Compatibility matrix tetap `UNVERIFIED — NOT SUPPORTED WITHOUT PHYSICAL TEST`; tindak lanjut dependency/security dan uji perangkat nyata diperlukan.
 
 **Pekerjaan:**
 

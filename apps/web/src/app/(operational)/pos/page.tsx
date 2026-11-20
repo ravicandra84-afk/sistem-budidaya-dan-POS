@@ -14,6 +14,10 @@ import { Button } from "@/components/ui/button";
 import { PageSkeleton } from "@/components/ui/data-states";
 import { Field, Input } from "@/components/ui/field";
 import { PageHeader } from "@/components/page-header";
+import {
+  PosReceiptPrint,
+  type PosReceiptData,
+} from "@/components/pos-receipt-print";
 import { useAuth } from "@/features/auth/auth-provider";
 import { ApiClientError, apiRequest } from "@/lib/api";
 import { formatInteger, formatPosRupiah } from "@/lib/format";
@@ -44,21 +48,9 @@ interface PosBatchList {
   };
 }
 
-interface PosReceipt {
-  company_name: string;
-  transaction_date_time: string;
-  species_name: string;
-  fish_size: string;
-  quantity: number;
-  unit_price: number;
-  total_payment: number;
-  payment_method: "cash" | "transfer";
-  cashier_name: string;
-}
-
 interface CreateSaleResponse {
   sale: { id: string };
-  receipt: PosReceipt;
+  receipt: PosReceiptData;
 }
 
 interface SalePayload {
@@ -124,7 +116,7 @@ export default function PosPage() {
   const [checkoutError, setCheckoutError] = useState("");
   const [uncertainAttempt, setUncertainAttempt] =
     useState<UncertainAttempt | null>(null);
-  const [receipt, setReceipt] = useState<PosReceipt | null>(null);
+  const [receipt, setReceipt] = useState<PosReceiptData | null>(null);
 
   useEffect(() => {
     if (ready && session && !canAccess) router.replace("/batches");
@@ -382,38 +374,14 @@ export default function PosPage() {
               </p>
             </div>
           </div>
-          <dl
-            className="grid gap-x-8 divide-y divide-border px-5 sm:grid-cols-2 sm:divide-y-0"
-            aria-label="Ringkasan struk"
-          >
-            <ReceiptField label="Perusahaan" value={receipt.company_name} />
-            <ReceiptField
-              label="Waktu transaksi (WIB)"
-              value={receipt.transaction_date_time}
+          <div className="px-4 py-4 sm:px-5">
+            <PosReceiptPrint
+              receipt={receipt}
+              printButtonLabel="Cetak Struk"
+              autoPrint
+              saleCommitted
             />
-            <ReceiptField label="Spesies" value={receipt.species_name} />
-            <ReceiptField label="Ukuran ikan" value={receipt.fish_size} />
-            <ReceiptField
-              label="Jumlah"
-              value={`${formatInteger(receipt.quantity)} ekor`}
-              numeric
-            />
-            <ReceiptField
-              label="Harga per ekor"
-              value={formatPosRupiah(receipt.unit_price)}
-              numeric
-            />
-            <ReceiptField
-              label="Total pembayaran"
-              value={formatPosRupiah(receipt.total_payment)}
-              numeric
-            />
-            <ReceiptField
-              label="Metode pembayaran"
-              value={receipt.payment_method === "cash" ? "Tunai" : "Transfer"}
-            />
-            <ReceiptField label="Nama kasir" value={receipt.cashier_name} />
-          </dl>
+          </div>
           <div className="border-t border-border px-5 py-4">
             <Button onClick={startNewSale}>
               <ShoppingCart className="size-4" aria-hidden="true" />
@@ -906,27 +874,6 @@ export default function PosPage() {
           </div>
         </fieldset>
       )}
-    </div>
-  );
-}
-
-function ReceiptField({
-  label,
-  value,
-  numeric = false,
-}: {
-  label: string;
-  value: string;
-  numeric?: boolean;
-}) {
-  return (
-    <div className="flex min-h-16 items-center justify-between gap-3 border-b border-border py-3 sm:last:border-b-0">
-      <dt className="text-sm text-slate-600">{label}</dt>
-      <dd
-        className={`text-right text-sm font-semibold text-marine ${numeric ? "tabular-nums" : ""}`}
-      >
-        {value}
-      </dd>
     </div>
   );
 }
