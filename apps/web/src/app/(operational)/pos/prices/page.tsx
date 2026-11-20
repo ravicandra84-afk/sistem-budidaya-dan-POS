@@ -1,6 +1,12 @@
 "use client";
 
-import { CircleDollarSign, LoaderCircle, Pencil, Plus, RefreshCw } from "lucide-react";
+import {
+  CircleDollarSign,
+  LoaderCircle,
+  Pencil,
+  Plus,
+  RefreshCw,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { FISH_SIZES, type FishSize } from "@pfi/shared";
@@ -14,10 +20,7 @@ import {
 import { Field, Input, Select } from "@/components/ui/field";
 import { PageHeader } from "@/components/page-header";
 import { useAuth } from "@/features/auth/auth-provider";
-import type {
-  PaginationData,
-  SpeciesItem,
-} from "@/features/receiving/types";
+import type { PaginationData, SpeciesItem } from "@/features/receiving/types";
 import { ApiClientError, apiRequest } from "@/lib/api";
 import { formatBusinessDateTime, formatPosRupiah } from "@/lib/format";
 import { PaginationControls } from "@/components/pagination-controls";
@@ -53,8 +56,7 @@ export default function PosPricesPage() {
     );
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
-  const [prices, setPrices] =
-    useState<PaginationData<PriceItem> | null>(null);
+  const [prices, setPrices] = useState<PaginationData<PriceItem> | null>(null);
   const [pricesLoading, setPricesLoading] = useState(true);
   const [pricesError, setPricesError] = useState("");
   const [pricesReload, setPricesReload] = useState(0);
@@ -74,9 +76,7 @@ export default function PosPricesPage() {
 
   useEffect(() => {
     if (ready && session && !canManage) {
-      router.replace(
-        session.user.role === "Kasir" ? "/pos" : "/batches",
-      );
+      router.replace(session.user.role === "Kasir" ? "/pos" : "/batches");
     }
   }, [canManage, ready, router, session]);
 
@@ -209,11 +209,17 @@ export default function PosPricesPage() {
       setEditingPrice(null);
       setPricesReload((value) => value + 1);
     } catch (error) {
-      if (error instanceof ApiClientError && error.code === "PRICE_ALREADY_EXISTS") {
+      if (
+        error instanceof ApiClientError &&
+        error.code === "PRICE_ALREADY_EXISTS"
+      ) {
         setFormError(
           "Harga untuk kombinasi spesies dan ukuran ini sudah tersedia. Pilih kombinasi lain atau ubah harga yang ada.",
         );
-      } else if (error instanceof ApiClientError && error.code === "PRICE_OUT_OF_RANGE") {
+      } else if (
+        error instanceof ApiClientError &&
+        error.code === "PRICE_OUT_OF_RANGE"
+      ) {
         setPriceError("Harga harus antara Rp1 dan Rp10.000.000 per ekor.");
       } else {
         setFormError(errorText(error));
@@ -238,7 +244,10 @@ export default function PosPricesPage() {
       />
 
       {notice ? (
-        <p className="mb-4 border-l-4 border-success bg-[#eff8ed] px-4 py-3 text-sm font-semibold text-[#347c2c]" role="status">
+        <p
+          className="mb-4 border-l-4 border-success bg-[#eff8ed] px-4 py-3 text-sm font-semibold text-[#347c2c]"
+          role="status"
+        >
           {notice}
         </p>
       ) : null}
@@ -285,7 +294,11 @@ export default function PosPricesPage() {
                   id="price-species"
                   value={speciesId}
                   onChange={(event) => setSpeciesId(event.target.value)}
-                  disabled={Boolean(editingPrice) || speciesLoading || species.length === 0}
+                  disabled={
+                    Boolean(editingPrice) ||
+                    speciesLoading ||
+                    species.length === 0
+                  }
                   required
                 >
                   <option value="">
@@ -345,12 +358,19 @@ export default function PosPricesPage() {
               </div>
             </fieldset>
             {priceError ? (
-              <p id="price-error" className="mt-3 text-sm text-danger" role="alert">
+              <p
+                id="price-error"
+                className="mt-3 text-sm text-danger"
+                role="alert"
+              >
                 {priceError}
               </p>
             ) : null}
             {formError ? (
-              <p className="mt-3 border-l-4 border-warning bg-[#fff7ed] px-3 py-2 text-sm text-[#9a4f05]" role="alert">
+              <p
+                className="mt-3 border-l-4 border-warning bg-[#fff7ed] px-3 py-2 text-sm text-[#9a4f05]"
+                role="alert"
+              >
                 {formError}
               </p>
             ) : null}
@@ -365,7 +385,10 @@ export default function PosPricesPage() {
               </Button>
               <Button disabled={submitting || speciesLoading} type="submit">
                 {submitting ? (
-                  <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+                  <LoaderCircle
+                    className="size-4 animate-spin"
+                    aria-hidden="true"
+                  />
                 ) : (
                   <CircleDollarSign className="size-4" aria-hidden="true" />
                 )}
@@ -376,7 +399,10 @@ export default function PosPricesPage() {
         </section>
       ) : null}
 
-      <section aria-label="Katalog harga" className="min-w-0 border-y border-border bg-white">
+      <section
+        aria-label="Katalog harga"
+        className="min-w-0 border-y border-border bg-white"
+      >
         {pricesLoading ? <TableSkeleton rows={5} /> : null}
         {!pricesLoading && pricesError ? (
           <ErrorState
@@ -463,7 +489,10 @@ export default function PosPricesPage() {
           </>
         ) : null}
       </section>
-      {pricesLoading || pricesError || !prices || prices.items.length === 0 ? null : (
+      {pricesLoading ||
+      pricesError ||
+      !prices ||
+      prices.items.length === 0 ? null : (
         <Button
           className="mt-4"
           variant="secondary"

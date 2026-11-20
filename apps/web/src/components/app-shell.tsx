@@ -4,6 +4,7 @@ import {
   Fish,
   LogOut,
   Plus,
+  ReceiptText,
   ScrollText,
   ShoppingCart,
   Tag,
@@ -59,6 +60,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     ...(session.user.role === "Owner" ||
     session.user.role === "Admin Operasional"
       ? [{ href: "/pos/prices", label: "Daftar harga", Icon: Tag }]
+      : []),
+    ...(session.user.role === "Owner" ||
+    session.user.role === "Admin Operasional" ||
+    session.user.role === "Kasir"
+      ? [{ href: "/pos/sales", label: "Riwayat penjualan", Icon: ReceiptText }]
       : []),
     ...(session.user.role === "Admin Operasional" ||
     session.user.role === "Kepala Budidaya"

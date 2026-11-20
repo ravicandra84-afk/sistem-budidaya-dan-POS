@@ -72,7 +72,12 @@ async function openPos(page: Page, role: TestRole) {
         successEnvelope(
           batchId === missingPriceBatchId
             ? batchItem(batchId, "BATCH-20261120-002", 8, null)
-            : batchItem(batchId ?? availableBatchId, "BATCH-20261120-001", 12, 2500),
+            : batchItem(
+                batchId ?? availableBatchId,
+                "BATCH-20261120-001",
+                12,
+                2500,
+              ),
         ),
       ),
     });
@@ -98,7 +103,11 @@ async function openPos(page: Page, role: TestRole) {
   );
 
   await page.goto("/pos");
-  return { get batchListRequests() { return batchListRequests; } };
+  return {
+    get batchListRequests() {
+      return batchListRequests;
+    },
+  };
 }
 
 for (const role of ["Owner", "Admin Operasional", "Kasir"] as const) {
@@ -123,14 +132,18 @@ test("Kepala Budidaya has no POS navigation and is redirected from /pos", async 
   await expect(page).toHaveURL(/\/batches$/);
   await expect(page.getByRole("link", { name: "POS / Kasir" })).toHaveCount(0);
   expect(pos.batchListRequests).toBe(0);
-  await expect(page.getByRole("heading", { name: "Kasir ikan" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Kasir ikan" })).toHaveCount(
+    0,
+  );
 });
 
 test("cashier workspace fits a narrow viewport without horizontal overflow", async ({
   page,
 }) => {
   await openPos(page, "Kasir");
-  await page.getByRole("button", { name: "Pilih batch BATCH-20261120-001" }).click();
+  await page
+    .getByRole("button", { name: "Pilih batch BATCH-20261120-001" })
+    .click();
   await page.getByLabel("Jumlah ikan (ekor)").waitFor();
   await page.setViewportSize({ width: 390, height: 844 });
 
@@ -160,7 +173,9 @@ test("cash checkout caps quantity and refreshes both price and stock conflicts",
         contentType: "application/json",
         body: JSON.stringify(
           successEnvelope({
-            items: [batchItem(availableBatchId, "BATCH-20261120-001", 12, 2500)],
+            items: [
+              batchItem(availableBatchId, "BATCH-20261120-001", 12, 2500),
+            ],
             pagination: { page: 1, limit: 100, totalItems: 1, totalPages: 1 },
           }),
         ),
@@ -174,7 +189,12 @@ test("cash checkout caps quantity and refreshes both price and stock conflicts",
       contentType: "application/json",
       body: JSON.stringify(
         successEnvelope(
-          batchItem(availableBatchId, "BATCH-20261120-001", currentStock, currentPrice),
+          batchItem(
+            availableBatchId,
+            "BATCH-20261120-001",
+            currentStock,
+            currentPrice,
+          ),
         ),
       ),
     });
@@ -261,16 +281,24 @@ test("cash checkout caps quantity and refreshes both price and stock conflicts",
   await expect(
     page.getByRole("button", { name: "Pilih batch BATCH-20261120-001" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Pilih batch BATCH-20261120-001" }).click();
+  await page
+    .getByRole("button", { name: "Pilih batch BATCH-20261120-001" })
+    .click();
   const checkout = page.locator('section[aria-labelledby="checkout-title"]');
   const batchSnapshot = checkout.locator(".grid.grid-cols-2");
-  await expect(batchSnapshot.getByText("Rp 2.500", { exact: true })).toBeVisible();
+  await expect(
+    batchSnapshot.getByText("Rp 2.500", { exact: true }),
+  ).toBeVisible();
   await page.getByLabel("Jumlah ikan (ekor)").fill("20");
   await expect(page.getByLabel("Jumlah ikan (ekor)")).toHaveValue("12");
   await expect(
-    page.locator('p[role="alert"]').filter({ hasText: "Jumlah dibatasi otomatis menjadi 12 ekor" }),
+    page
+      .locator('p[role="alert"]')
+      .filter({ hasText: "Jumlah dibatasi otomatis menjadi 12 ekor" }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Simpan penjualan" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Simpan penjualan" }),
+  ).toBeDisabled();
   await page.getByLabel("Saya menyetujui jumlah yang dibatasi").check();
   await page.getByLabel("Saya mengonfirmasi harga terbaru").check();
   await page.getByLabel("Uang diterima (Rp)").fill("50000");
@@ -280,9 +308,15 @@ test("cash checkout caps quantity and refreshes both price and stock conflicts",
   await expect(
     page.locator('p[role="alert"]').filter({ hasText: "Harga berubah" }),
   ).toBeVisible();
-  await expect(batchSnapshot.getByText("Rp 3.000", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Saya mengonfirmasi harga terbaru")).not.toBeChecked();
-  await expect(page.getByRole("button", { name: "Simpan penjualan" })).toBeDisabled();
+  await expect(
+    batchSnapshot.getByText("Rp 3.000", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("Saya mengonfirmasi harga terbaru"),
+  ).not.toBeChecked();
+  await expect(
+    page.getByRole("button", { name: "Simpan penjualan" }),
+  ).toBeDisabled();
   await page.getByLabel("Saya mengonfirmasi harga terbaru").check();
   await expect(checkout.getByText("Rp 36.000", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Simpan penjualan" }).click();
@@ -292,29 +326,57 @@ test("cash checkout caps quantity and refreshes both price and stock conflicts",
   ).toBeVisible();
   await expect(page.getByLabel("Jumlah ikan (ekor)")).toHaveValue("5");
   await expect(
-    page.locator('p[role="alert"]').filter({ hasText: "Jumlah dibatasi otomatis menjadi 5 ekor" }),
+    page
+      .locator('p[role="alert"]')
+      .filter({ hasText: "Jumlah dibatasi otomatis menjadi 5 ekor" }),
   ).toBeVisible();
-  await expect(page.getByLabel("Saya mengonfirmasi harga terbaru")).not.toBeChecked();
-  await expect(page.getByRole("button", { name: "Simpan penjualan" })).toBeDisabled();
+  await expect(
+    page.getByLabel("Saya mengonfirmasi harga terbaru"),
+  ).not.toBeChecked();
+  await expect(
+    page.getByRole("button", { name: "Simpan penjualan" }),
+  ).toBeDisabled();
   await page.getByLabel("Saya menyetujui jumlah yang dibatasi").check();
   await page.getByLabel("Saya mengonfirmasi harga terbaru").check();
   await expect(checkout.getByText("Rp 15.000", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Simpan penjualan" }).click();
 
-  await expect(page.getByRole("heading", { name: "Penjualan berhasil disimpan" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Penjualan berhasil disimpan" }),
+  ).toBeVisible();
   await expect(page.getByRole("definition")).toHaveCount(9);
   await expect(page.getByText("PT. Pisciculture Farm Indonesia")).toBeVisible();
   await expect(
     page.getByLabel("Ringkasan struk").getByText("Kasir E2E"),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Mulai transaksi baru" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Mulai transaksi baru" }),
+  ).toBeVisible();
   expect(detailRequests).toBeGreaterThanOrEqual(3);
   expect(saleAttempts).toBe(3);
-  expect(idempotencyKeys.every((key) => /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key))).toBe(true);
+  expect(
+    idempotencyKeys.every((key) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        key,
+      ),
+    ),
+  ).toBe(true);
   expect(new Set(idempotencyKeys).size).toBe(3);
-  expect(payloads[0]).toMatchObject({ quantity: 12, expected_unit_price: 2500, cash_received: 50000 });
-  expect(payloads[1]).toMatchObject({ quantity: 12, expected_unit_price: 3000, cash_received: 50000 });
-  expect(payloads[2]).toMatchObject({ quantity: 5, expected_unit_price: 3000, cash_received: 50000 });
+  expect(payloads[0]).toMatchObject({
+    quantity: 12,
+    expected_unit_price: 2500,
+    cash_received: 50000,
+  });
+  expect(payloads[1]).toMatchObject({
+    quantity: 12,
+    expected_unit_price: 3000,
+    cash_received: 50000,
+  });
+  expect(payloads[2]).toMatchObject({
+    quantity: 5,
+    expected_unit_price: 3000,
+    cash_received: 50000,
+  });
 });
 
 test("missing price blocks checkout and transfer requires an explicit confirmation", async ({
@@ -340,7 +402,12 @@ test("missing price blocks checkout and transfer requires an explicit confirmati
               : batchItem(availableBatchId, "BATCH-20261120-001", 8, 1000)
             : {
                 items,
-                pagination: { page: 1, limit: 100, totalItems: 2, totalPages: 1 },
+                pagination: {
+                  page: 1,
+                  limit: 100,
+                  totalItems: 2,
+                  totalPages: 1,
+                },
               },
         ),
       ),
@@ -387,24 +454,42 @@ test("missing price blocks checkout and transfer requires an explicit confirmati
   await page.goto("/pos");
 
   await expect(page.getByText("Harga belum tersedia").first()).toBeVisible();
-  await page.getByRole("button", { name: "Pilih batch BATCH-20261120-002" }).click();
+  await page
+    .getByRole("button", { name: "Pilih batch BATCH-20261120-002" })
+    .click();
   await expect(page.locator('p[role="alert"]')).toContainText("belum tersedia");
-  await expect(page.getByRole("button", { name: "Simpan penjualan" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Simpan penjualan" }),
+  ).toBeDisabled();
 
-  await page.getByRole("button", { name: "Pilih batch BATCH-20261120-001" }).click();
+  await page
+    .getByRole("button", { name: "Pilih batch BATCH-20261120-001" })
+    .click();
   await expect(
     page
       .locator('section[aria-labelledby="checkout-title"] .grid.grid-cols-2')
       .getByText("Rp 1.000", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("checkbox", { name: "Saya mengonfirmasi harga terbaru" }).check();
+  await page
+    .getByRole("checkbox", { name: "Saya mengonfirmasi harga terbaru" })
+    .check();
   await page.getByRole("radio", { name: "Transfer" }).check();
-  await expect(page.getByRole("button", { name: "Simpan penjualan" })).toBeDisabled();
-  await page.getByRole("checkbox", { name: "Saya mengonfirmasi dana transfer sudah diterima" }).check();
-  await expect(page.getByRole("button", { name: "Simpan penjualan" })).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "Simpan penjualan" }),
+  ).toBeDisabled();
+  await page
+    .getByRole("checkbox", {
+      name: "Saya mengonfirmasi dana transfer sudah diterima",
+    })
+    .check();
+  await expect(
+    page.getByRole("button", { name: "Simpan penjualan" }),
+  ).toBeEnabled();
   await page.getByRole("button", { name: "Simpan penjualan" }).click();
 
-  await expect(page.getByRole("heading", { name: "Penjualan berhasil disimpan" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Penjualan berhasil disimpan" }),
+  ).toBeVisible();
   expect(salePayload).toMatchObject({
     batch_id: availableBatchId,
     quantity: 1,

@@ -199,9 +199,7 @@ export default function PosPage() {
   const availableStock = batchDetail?.batch.current_stock ?? 0;
   const currentPrice = batchDetail?.unit_price ?? null;
   const totalAmount =
-    currentPrice !== null && quantityIsValid
-      ? quantity * currentPrice
-      : null;
+    currentPrice !== null && quantityIsValid ? quantity * currentPrice : null;
   const cashReceived = Number(cashReceivedInput);
   const cashIsValid =
     Number.isSafeInteger(cashReceived) &&
@@ -300,8 +298,7 @@ export default function PosPage() {
       if (
         error instanceof ApiClientError &&
         error.status === 409 &&
-        (error.code === "PRICE_CHANGED" ||
-          error.code === "INSUFFICIENT_STOCK")
+        (error.code === "PRICE_CHANGED" || error.code === "INSUFFICIENT_STOCK")
       ) {
         setPriceConfirmed(false);
         if (error.code === "PRICE_CHANGED") {
@@ -315,10 +312,7 @@ export default function PosPage() {
             "Harga berubah. Harga terbaru dimuat; periksa dan konfirmasikan ulang sebelum menyimpan.",
           );
         } else {
-          const latestStock = safeNumber(
-            error.details,
-            "available_quantity",
-          );
+          const latestStock = safeNumber(error.details, "available_quantity");
           if (latestStock !== undefined) {
             setBatchDetail((current) =>
               current
@@ -433,14 +427,20 @@ export default function PosPage() {
           disabled={submitting || detailLoading}
         >
           {submitting ? (
-            <p className="mb-4 flex items-center gap-2 text-sm font-semibold text-marine" role="status">
+            <p
+              className="mb-4 flex items-center gap-2 text-sm font-semibold text-marine"
+              role="status"
+            >
               <span className="size-4 animate-spin rounded-full border-2 border-sky border-r-transparent" />
               Menyimpan penjualan...
             </p>
           ) : null}
 
           <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.8fr)_minmax(320px,1fr)]">
-            <section aria-labelledby="sellable-batches-title" className="min-w-0">
+            <section
+              aria-labelledby="sellable-batches-title"
+              className="min-w-0"
+            >
               <div className="mb-3 flex items-end justify-between gap-3">
                 <div>
                   <h2
@@ -467,7 +467,10 @@ export default function PosPage() {
 
               <div className="min-h-56 border-y border-border bg-white">
                 {batchListLoading ? (
-                  <div className="animate-pulse divide-y divide-border" aria-label="Memuat batch">
+                  <div
+                    className="animate-pulse divide-y divide-border"
+                    aria-label="Memuat batch"
+                  >
                     {[0, 1, 2].map((row) => (
                       <div key={row} className="grid gap-3 px-4 py-4">
                         <div className="h-4 w-2/5 rounded bg-slate-200" />
@@ -478,7 +481,10 @@ export default function PosPage() {
                 ) : null}
                 {!batchListLoading && batchListError ? (
                   <div className="flex min-h-56 flex-col items-center justify-center px-5 text-center">
-                    <AlertTriangle className="mb-2 size-6 text-danger" aria-hidden="true" />
+                    <AlertTriangle
+                      className="mb-2 size-6 text-danger"
+                      aria-hidden="true"
+                    />
                     <p className="text-sm text-slate-700">{batchListError}</p>
                     <Button
                       className="mt-3"
@@ -495,12 +501,16 @@ export default function PosPage() {
                 !batchListError &&
                 batchList?.items.length === 0 ? (
                   <div className="flex min-h-56 flex-col items-center justify-center px-5 text-center">
-                    <ShoppingCart className="mb-2 size-7 text-slate-400" aria-hidden="true" />
+                    <ShoppingCart
+                      className="mb-2 size-7 text-slate-400"
+                      aria-hidden="true"
+                    />
                     <p className="font-semibold text-marine">
                       Belum ada batch siap jual
                     </p>
                     <p className="mt-1 text-sm text-slate-500">
-                      Batch aktif dengan stok lebih dari nol akan muncul di sini.
+                      Batch aktif dengan stok lebih dari nol akan muncul di
+                      sini.
                     </p>
                   </div>
                 ) : null}
@@ -556,7 +566,8 @@ export default function PosPage() {
               {batchList && batchList.pagination.totalPages > 1 ? (
                 <div className="flex items-center justify-between gap-3 py-3 text-xs text-slate-600">
                   <span>
-                    Halaman {batchList.pagination.page} dari {batchList.pagination.totalPages}
+                    Halaman {batchList.pagination.page} dari{" "}
+                    {batchList.pagination.totalPages}
                   </span>
                   <span className="flex gap-2">
                     <Button
@@ -590,13 +601,19 @@ export default function PosPage() {
                 <h2 id="checkout-title" className="font-bold text-marine">
                   Pembayaran
                 </h2>
-                <CircleDollarSign className="size-5 text-teal" aria-hidden="true" />
+                <CircleDollarSign
+                  className="size-5 text-teal"
+                  aria-hidden="true"
+                />
               </div>
 
               {selectedBatchId ? (
                 <div className="space-y-4 p-4">
                   {detailLoading ? (
-                    <div className="animate-pulse space-y-3" aria-label="Memuat detail batch">
+                    <div
+                      className="animate-pulse space-y-3"
+                      aria-label="Memuat detail batch"
+                    >
                       <div className="h-4 w-2/3 rounded bg-slate-200" />
                       <div className="h-12 rounded bg-slate-100" />
                       <div className="h-12 rounded bg-slate-100" />
@@ -605,7 +622,11 @@ export default function PosPage() {
                   {!detailLoading && detailError ? (
                     <div className="space-y-3" role="alert">
                       <p className="text-sm text-danger">{detailError}</p>
-                      <Button variant="secondary" onClick={refreshBatch} type="button">
+                      <Button
+                        variant="secondary"
+                        onClick={refreshBatch}
+                        type="button"
+                      >
                         <RefreshCw className="size-4" aria-hidden="true" />
                         Coba muat ulang detail
                       </Button>
@@ -616,7 +637,8 @@ export default function PosPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="truncate font-semibold text-marine">
-                            {batchDetail.species.species_name} / {batchDetail.fish_size}
+                            {batchDetail.species.species_name} /{" "}
+                            {batchDetail.fish_size}
                           </p>
                           <p className="mt-0.5 font-mono text-xs tabular-nums text-slate-500">
                             {batchDetail.batch.batch_code}
@@ -636,13 +658,17 @@ export default function PosPage() {
 
                       <div className="grid grid-cols-2 gap-3 border-y border-border py-3">
                         <div>
-                          <p className="text-xs text-slate-500">Stok tersedia</p>
+                          <p className="text-xs text-slate-500">
+                            Stok tersedia
+                          </p>
                           <p className="mt-1 font-bold tabular-nums text-marine">
                             {formatInteger(availableStock)} ekor
                           </p>
                         </div>
                         <div>
-                          <p className="text-xs text-slate-500">Harga terkini</p>
+                          <p className="text-xs text-slate-500">
+                            Harga terkini
+                          </p>
                           <p className="mt-1 font-bold tabular-nums text-marine">
                             {currentPrice === null
                               ? "Belum tersedia"
@@ -652,17 +678,28 @@ export default function PosPage() {
                       </div>
 
                       {currentPrice === null ? (
-                        <p className="border-l-4 border-warning bg-[#fff7ed] px-3 py-2 text-sm text-[#9a4f05]" role="alert">
-                          Harga untuk spesies dan ukuran ini belum tersedia. Batch tidak dapat di-checkout.
+                        <p
+                          className="border-l-4 border-warning bg-[#fff7ed] px-3 py-2 text-sm text-[#9a4f05]"
+                          role="alert"
+                        >
+                          Harga untuk spesies dan ukuran ini belum tersedia.
+                          Batch tidak dapat di-checkout.
                         </p>
                       ) : null}
                       {availableStock === 0 ? (
-                        <p className="border-l-4 border-danger bg-[#fef2f2] px-3 py-2 text-sm text-danger" role="alert">
+                        <p
+                          className="border-l-4 border-danger bg-[#fef2f2] px-3 py-2 text-sm text-danger"
+                          role="alert"
+                        >
                           Stok batch sudah habis dan tidak dapat dijual.
                         </p>
                       ) : null}
 
-                      <Field id="pos-quantity" label="Jumlah ikan (ekor)" required>
+                      <Field
+                        id="pos-quantity"
+                        label="Jumlah ikan (ekor)"
+                        required
+                      >
                         <Input
                           id="pos-quantity"
                           type="number"
@@ -672,25 +709,37 @@ export default function PosPage() {
                           inputMode="numeric"
                           className="tabular-nums"
                           value={quantityInput}
-                          onChange={(event) => updateQuantity(event.target.value)}
+                          onChange={(event) =>
+                            updateQuantity(event.target.value)
+                          }
                           aria-describedby="pos-quantity-hint"
                         />
                       </Field>
-                      <p id="pos-quantity-hint" className="-mt-3 text-xs text-slate-500">
-                        Maksimal {formatInteger(availableStock)} ekor dari batch ini.
+                      <p
+                        id="pos-quantity-hint"
+                        className="-mt-3 text-xs text-slate-500"
+                      >
+                        Maksimal {formatInteger(availableStock)} ekor dari batch
+                        ini.
                       </p>
                       {quantityAdjustmentRequired ? (
                         <div className="space-y-2 border-l-4 border-warning bg-[#fff7ed] px-3 py-2">
-                          <p className="text-sm font-semibold text-[#9a4f05]" role="alert">
-                            Jumlah dibatasi otomatis menjadi {formatInteger(quantity)} ekor.
-                            Konfirmasikan jumlah sebelum melanjutkan.
+                          <p
+                            className="text-sm font-semibold text-[#9a4f05]"
+                            role="alert"
+                          >
+                            Jumlah dibatasi otomatis menjadi{" "}
+                            {formatInteger(quantity)} ekor. Konfirmasikan jumlah
+                            sebelum melanjutkan.
                           </p>
                           <label className="flex min-h-11 items-center gap-2 text-sm text-marine">
                             <input
                               type="checkbox"
                               checked={quantityAdjustmentConfirmed}
                               onChange={(event) =>
-                                setQuantityAdjustmentConfirmed(event.target.checked)
+                                setQuantityAdjustmentConfirmed(
+                                  event.target.checked,
+                                )
                               }
                             />
                             Saya menyetujui jumlah yang dibatasi
@@ -702,8 +751,12 @@ export default function PosPage() {
                         <input
                           type="checkbox"
                           checked={priceConfirmed}
-                          disabled={currentPrice === null || availableStock === 0}
-                          onChange={(event) => setPriceConfirmed(event.target.checked)}
+                          disabled={
+                            currentPrice === null || availableStock === 0
+                          }
+                          onChange={(event) =>
+                            setPriceConfirmed(event.target.checked)
+                          }
                         />
                         Saya mengonfirmasi harga terbaru
                       </label>
@@ -713,7 +766,9 @@ export default function PosPage() {
                           Metode pembayaran
                         </legend>
                         <div className="grid grid-cols-2 gap-2">
-                          <label className={`flex min-h-11 items-center gap-2 border px-3 text-sm font-semibold ${paymentMethod === "cash" ? "border-marine bg-[#eef4f8] text-marine" : "border-border text-slate-600"}`}>
+                          <label
+                            className={`flex min-h-11 items-center gap-2 border px-3 text-sm font-semibold ${paymentMethod === "cash" ? "border-marine bg-[#eef4f8] text-marine" : "border-border text-slate-600"}`}
+                          >
                             <input
                               type="radio"
                               name="payment-method"
@@ -726,7 +781,9 @@ export default function PosPage() {
                             />
                             Tunai
                           </label>
-                          <label className={`flex min-h-11 items-center gap-2 border px-3 text-sm font-semibold ${paymentMethod === "transfer" ? "border-marine bg-[#eef4f8] text-marine" : "border-border text-slate-600"}`}>
+                          <label
+                            className={`flex min-h-11 items-center gap-2 border px-3 text-sm font-semibold ${paymentMethod === "transfer" ? "border-marine bg-[#eef4f8] text-marine" : "border-border text-slate-600"}`}
+                          >
                             <input
                               type="radio"
                               name="payment-method"
@@ -740,7 +797,11 @@ export default function PosPage() {
                       </fieldset>
 
                       {paymentMethod === "cash" ? (
-                        <Field id="pos-cash-received" label="Uang diterima (Rp)" required>
+                        <Field
+                          id="pos-cash-received"
+                          label="Uang diterima (Rp)"
+                          required
+                        >
                           <Input
                             id="pos-cash-received"
                             type="number"
@@ -749,7 +810,9 @@ export default function PosPage() {
                             inputMode="numeric"
                             className="tabular-nums"
                             value={cashReceivedInput}
-                            onChange={(event) => setCashReceivedInput(event.target.value)}
+                            onChange={(event) =>
+                              setCashReceivedInput(event.target.value)
+                            }
                           />
                         </Field>
                       ) : (
@@ -757,7 +820,9 @@ export default function PosPage() {
                           <input
                             type="checkbox"
                             checked={transferConfirmed}
-                            onChange={(event) => setTransferConfirmed(event.target.checked)}
+                            onChange={(event) =>
+                              setTransferConfirmed(event.target.checked)
+                            }
                           />
                           Saya mengonfirmasi dana transfer sudah diterima
                         </label>
@@ -767,7 +832,9 @@ export default function PosPage() {
                         <div className="flex items-center justify-between gap-3">
                           <dt className="text-slate-600">Total pembayaran</dt>
                           <dd className="font-bold tabular-nums text-marine">
-                            {totalAmount === null ? "—" : formatPosRupiah(totalAmount)}
+                            {totalAmount === null
+                              ? "—"
+                              : formatPosRupiah(totalAmount)}
                           </dd>
                         </div>
                         {paymentMethod === "cash" ? (
@@ -786,11 +853,15 @@ export default function PosPage() {
                       totalAmount !== null &&
                       !cashIsValid ? (
                         <p className="text-xs text-danger" role="alert">
-                          Uang diterima harus sama dengan atau lebih besar dari total.
+                          Uang diterima harus sama dengan atau lebih besar dari
+                          total.
                         </p>
                       ) : null}
                       {checkoutError ? (
-                        <p className="border-l-4 border-warning bg-[#fff7ed] px-3 py-2 text-sm text-[#9a4f05]" role="alert">
+                        <p
+                          className="border-l-4 border-warning bg-[#fff7ed] px-3 py-2 text-sm text-[#9a4f05]"
+                          role="alert"
+                        >
                           {checkoutError}
                         </p>
                       ) : null}
@@ -804,7 +875,8 @@ export default function PosPage() {
                         Simpan penjualan
                       </Button>
                       <p className="text-center text-xs text-slate-500">
-                        Harga dan stok diperiksa kembali saat transaksi disimpan.
+                        Harga dan stok diperiksa kembali saat transaksi
+                        disimpan.
                       </p>
                     </>
                   ) : null}
@@ -817,10 +889,16 @@ export default function PosPage() {
                 </div>
               ) : (
                 <div className="flex min-h-48 flex-col items-center justify-center px-5 text-center">
-                  <ShoppingCart className="mb-2 size-7 text-slate-400" aria-hidden="true" />
-                  <p className="font-semibold text-marine">Belum ada batch dipilih</p>
+                  <ShoppingCart
+                    className="mb-2 size-7 text-slate-400"
+                    aria-hidden="true"
+                  />
+                  <p className="font-semibold text-marine">
+                    Belum ada batch dipilih
+                  </p>
                   <p className="mt-1 text-sm text-slate-500">
-                    Pilih satu batch. Setiap transaksi hanya menggunakan satu batch.
+                    Pilih satu batch. Setiap transaksi hanya menggunakan satu
+                    batch.
                   </p>
                 </div>
               )}
@@ -844,7 +922,9 @@ function ReceiptField({
   return (
     <div className="flex min-h-16 items-center justify-between gap-3 border-b border-border py-3 sm:last:border-b-0">
       <dt className="text-sm text-slate-600">{label}</dt>
-      <dd className={`text-right text-sm font-semibold text-marine ${numeric ? "tabular-nums" : ""}`}>
+      <dd
+        className={`text-right text-sm font-semibold text-marine ${numeric ? "tabular-nums" : ""}`}
+      >
         {value}
       </dd>
     </div>

@@ -24,7 +24,10 @@ function priceItem(
     price_per_fish: price,
     created_at: "2026-11-19T03:00:00.000Z",
     updated_at: "2026-11-20T03:00:00.000Z",
-    updated_by: { id: "55555555-5555-4555-8555-555555555555", name: updaterName },
+    updated_by: {
+      id: "55555555-5555-4555-8555-555555555555",
+      name: updaterName,
+    },
   };
 }
 
@@ -121,7 +124,8 @@ for (const role of ["Owner", "Admin Operasional"] as const) {
         if (body.species_id === nilaId && body.fish_size === "3-5 cm") {
           await fulfillJson(route, 409, {
             status: "error",
-            message: "Harga untuk kombinasi spesies dan ukuran ini sudah tersedia.",
+            message:
+              "Harga untuk kombinasi spesies dan ukuran ini sudah tersedia.",
             error: { code: "PRICE_ALREADY_EXISTS" },
             meta: { request_id: "price-already-exists" },
           });
@@ -166,12 +170,18 @@ for (const role of ["Owner", "Admin Operasional"] as const) {
     await setRoleSession(page, role);
     await page.goto("/pos/prices");
 
-    await expect(page.getByRole("link", { name: "Daftar harga" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Daftar harga" })).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Daftar harga" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Daftar harga" }),
+    ).toBeVisible();
     await expect(page.getByText("Ikan Nila").first()).toBeVisible();
     await expect(page.getByText("Rp 2.500", { exact: true })).toBeVisible();
     await expect(page.getByText("Owner Uji").first()).toBeVisible();
-    await expect(page.getByRole("button", { name: /hapus|delete/i })).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: /hapus|delete/i }),
+    ).toHaveCount(0);
 
     await page.getByRole("button", { name: "Tambah harga baru" }).click();
     await page.getByLabel("Spesies ikan").selectOption(nilaId);
@@ -218,7 +228,9 @@ for (const role of ["Owner", "Admin Operasional"] as const) {
         name: "Ubah harga Ikan Nila, ukuran 3-5 cm",
       })
       .click();
-    await expect(page.getByRole("heading", { name: "Ubah harga" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Ubah harga" }),
+    ).toBeVisible();
     await expect(page.getByLabel("Spesies ikan")).toBeDisabled();
     await expect(page.getByLabel("Ukuran ikan")).toBeDisabled();
     await page.getByLabel("Harga per ekor (Rp)").fill("10000000");
@@ -239,9 +251,13 @@ for (const role of ["Owner", "Admin Operasional"] as const) {
       price_per_fish: 1,
     });
     expect(patchPayloads).toEqual([{ price_per_fish: 10_000_000 }]);
-    expect(mutationKeys.every((key) =>
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key),
-    )).toBe(true);
+    expect(
+      mutationKeys.every((key) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          key,
+        ),
+      ),
+    ).toBe(true);
     expect(new Set(mutationKeys).size).toBe(3);
   });
 }
@@ -251,21 +267,33 @@ for (const role of ["Kasir", "Kepala Budidaya"] as const) {
     let priceRequests = 0;
     await page.route("**/api/v1/pos/prices**", async (route) => {
       priceRequests += 1;
-      await fulfillJson(route, 200, successEnvelope({ items: [], pagination: {} }));
+      await fulfillJson(
+        route,
+        200,
+        successEnvelope({ items: [], pagination: {} }),
+      );
     });
     await stubSpecies(page);
     await setRoleSession(page, role);
     await page.goto("/pos/prices");
 
     await expect(page).toHaveURL(role === "Kasir" ? /\/pos$/ : /\/batches$/);
-    await expect(page.getByRole("link", { name: "Daftar harga" })).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: "Daftar harga" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Tambah harga baru" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Daftar harga" })).toHaveCount(
+      0,
+    );
+    await expect(
+      page.getByRole("heading", { name: "Daftar harga" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Tambah harga baru" }),
+    ).toHaveCount(0);
     expect(priceRequests).toBe(0);
   });
 }
 
-test("prices use standard pagination and fit a 390px viewport", async ({ page }) => {
+test("prices use standard pagination and fit a 390px viewport", async ({
+  page,
+}) => {
   const firstPage = Array.from({ length: 20 }, (_, index) =>
     priceItem(
       `77777777-7777-4777-8777-${String(index + 1).padStart(12, "0")}`,
@@ -276,13 +304,21 @@ test("prices use standard pagination and fit a 390px viewport", async ({ page })
     ),
   );
   const secondPage = [
-    priceItem("88888888-8888-4888-8888-888888888888", leleId, "Ikan Lele 21", "4-6 cm", 5000),
+    priceItem(
+      "88888888-8888-4888-8888-888888888888",
+      leleId,
+      "Ikan Lele 21",
+      "4-6 cm",
+      5000,
+    ),
   ];
   const requests: string[] = [];
 
   await page.route("**/api/v1/pos/prices**", async (route) => {
     const url = new URL(route.request().url());
-    requests.push(`${url.searchParams.get("page")}:${url.searchParams.get("limit")}`);
+    requests.push(
+      `${url.searchParams.get("page")}:${url.searchParams.get("limit")}`,
+    );
     const pageNumber = Number(url.searchParams.get("page") ?? 1);
     await fulfillJson(
       route,
@@ -314,5 +350,7 @@ test("prices use standard pagination and fit a 390px viewport", async ({ page })
     document: document.documentElement.scrollWidth,
   }));
   expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport);
-  await expect(page.getByRole("heading", { name: "Daftar harga" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Daftar harga" }),
+  ).toBeVisible();
 });
