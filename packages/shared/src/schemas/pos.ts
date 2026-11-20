@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { FISH_SIZES } from "../domain/fish";
 import { POS_SALE_STATUSES } from "../domain/pos";
 import { paginationQuerySchema } from "./pagination";
 
@@ -32,6 +33,40 @@ export const posSalesListQuerySchema = paginationQuerySchema.extend({
 });
 
 export type PosSalesListQuery = z.infer<typeof posSalesListQuerySchema>;
+
+export const posPricesListQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+  })
+  .strict();
+
+export type PosPricesListQuery = z.infer<typeof posPricesListQuerySchema>;
+
+export const posBatchesListQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+  })
+  .strict();
+
+export type PosBatchesListQuery = z.infer<typeof posBatchesListQuerySchema>;
+
+export const createSalePriceSchema = z
+  .object({
+    species_id: z.uuid(),
+    fish_size: z.enum(FISH_SIZES),
+    price_per_fish: z.number().int(),
+  })
+  .strict();
+
+export type CreateSalePriceInput = z.infer<typeof createSalePriceSchema>;
+
+export const updateSalePriceSchema = z
+  .object({ price_per_fish: z.number().int() })
+  .strict();
+
+export type UpdateSalePriceInput = z.infer<typeof updateSalePriceSchema>;
 
 export const voidSaleSchema = z.object({}).strict();
 export type VoidSaleInput = z.infer<typeof voidSaleSchema>;

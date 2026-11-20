@@ -706,7 +706,7 @@ Baseline cetak adalah browser print CSS 58 mm/80 mm dan dialog cetak sistem. Kep
 
 Struk hanya memuat:
 
-1. Nama perusahaan: Pisciculture Farm Indonesia.
+1. Nama perusahaan: PT. Pisciculture Farm Indonesia.
 2. Tanggal dan waktu transaksi.
 3. Spesies ikan.
 4. Ukuran ikan.

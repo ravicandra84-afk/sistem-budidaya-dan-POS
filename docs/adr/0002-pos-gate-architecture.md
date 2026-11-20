@@ -140,7 +140,7 @@ never changes the sale result. Retry printing uses the existing sale; it
 does not submit a second sale. Mobile/tablet use the system print dialog
 where supported.
 
-The receipt contains exactly these nine approved fields: Pisciculture Farm
+The receipt contains exactly these nine approved fields: PT. Pisciculture Farm
 Indonesia; transaction date/time in `Asia/Jakarta`; species; fish size;
 quantity in `ekor`; price per fish; total payment; payment method; cashier
 name. It does not contain sale number, batch code, weight, customer data,

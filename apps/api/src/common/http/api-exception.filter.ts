@@ -86,8 +86,8 @@ export class ApiExceptionFilter implements ExceptionFilter {
       };
     }
     if (
-      ["P2034", "55P03", "57014"].includes(code) ||
-      ["55P03", "57014"].includes(databaseCode)
+      ["P2034", "40P01", "55P03", "57014"].includes(code) ||
+      ["40P01", "55P03", "57014"].includes(databaseCode)
     ) {
       return {
         status: HttpStatus.SERVICE_UNAVAILABLE,

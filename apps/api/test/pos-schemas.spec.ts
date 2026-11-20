@@ -1,8 +1,12 @@
 import {
   createSaleSchema,
+  createSalePriceSchema,
   PAYMENT_METHODS,
   POS_ERROR_CODES,
+  posBatchesListQuerySchema,
+  posPricesListQuerySchema,
   posSalesListQuerySchema,
+  updateSalePriceSchema,
   voidSaleSchema,
 } from "@pfi/shared";
 
@@ -90,5 +94,55 @@ describe("POS shared sale contract", () => {
     expect(voidSaleSchema.safeParse({ reason: "not allowed" }).success).toBe(
       false,
     );
+  });
+
+  it("validates price pagination and strict create/update payloads", () => {
+    expect(posPricesListQuerySchema.parse({})).toEqual({ page: 1, limit: 20 });
+    expect(
+      posPricesListQuerySchema.safeParse({ startDate: "2026-11-20T00:00:00Z" })
+        .success,
+    ).toBe(false);
+    expect(
+      createSalePriceSchema.safeParse({
+        species_id: sale.batch_id,
+        fish_size: "3-5 cm",
+        price_per_fish: 2500,
+      }).success,
+    ).toBe(true);
+    expect(
+      createSalePriceSchema.safeParse({
+        species_id: sale.batch_id,
+        fish_size: "3-5 cm",
+        price_per_fish: 2500.5,
+      }).success,
+    ).toBe(false);
+    expect(
+      updateSalePriceSchema.safeParse({ price_per_fish: 2500 }).success,
+    ).toBe(true);
+    expect(
+      updateSalePriceSchema.safeParse({
+        price_per_fish: 2500,
+        species_id: sale.batch_id,
+      }).success,
+    ).toBe(false);
+    expect(POS_ERROR_CODES).toContain("PRICE_OUT_OF_RANGE");
+  });
+
+  it("validates POS batch pagination without transaction-date filters", () => {
+    expect(posBatchesListQuerySchema.parse({})).toEqual({
+      page: 1,
+      limit: 20,
+    });
+    expect(
+      posBatchesListQuerySchema.parse({ page: "2", limit: "100" }),
+    ).toEqual({ page: 2, limit: 100 });
+    expect(posBatchesListQuerySchema.safeParse({ limit: 101 }).success).toBe(
+      false,
+    );
+    expect(
+      posBatchesListQuerySchema.safeParse({
+        startDate: "2026-11-20T00:00:00Z",
+      }).success,
+    ).toBe(false);
   });
 });

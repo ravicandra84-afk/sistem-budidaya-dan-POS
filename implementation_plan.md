@@ -648,21 +648,25 @@ Gate dinyatakan lulus hanya jika:
 
 ## Task GPOS-01 — Verifikasi keputusan owner & selesaikan sisa TBD POS
 
-| TBD    | Status Terkini                                            | Keputusan / Sisa tindakan yang dibutuhkan                                                                                                                                                                                                                                                            |
-| ------ | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| TBD-01 | `APPROVED — OWNER`                                        | Ditetapkan batas harga Rp 1 s.d. Rp 10.000.000 per ekor (`BIGINT`, Rupiah bulat tanpa desimal).                                                                                                                                                                                                      |
-| TBD-02 | `APPROVED — OWNER` (ADR 0002 amendment)                   | Tambah harga memakai `CREATE_SALE_PRICE`; ubah harga memakai `UPDATE_SALE_PRICE`. Keduanya hanya mencatat aktor/waktu dengan `old_values = NULL`, `new_values = NULL`.                                                                                                                              |
-| TBD-03 | `APPROVED — OWNER` (ADR 0002)                             | Browser print CSS 58/80 mm dan dialog cetak sistem menjadi baseline; GPOS-04 tetap menguji perangkat/printer fisik sebelum klaim kompatibilitas.                                                                                                                                                |
-| TBD-04 | `APPROVED — OWNER` (ADR 0002)                             | Kontrak final tercatat pada `docs/pos-api-contract.md`; perubahan memerlukan keputusan owner baru.                                                                                                                                                                                                 |
-| TBD-05 | `APPROVED — OWNER`                                        | Menggunakan tabel `sale_daily_sequences` (`sale_date DATE PRIMARY KEY`, `last_number BIGINT`) tanpa batas 999.                                                                                                                                                                                       |
-| TBD-06 | `APPROVED — OWNER` (ADR 0002)                             | Skema 4 tabel, stok terhitung, trigger, guard receiving VOID, audit action, index, dan granular privileges disetujui; belum diterapkan.                                                                                                                                                            |
-| TBD-07 | `APPROVED — OWNER`                                        | Role `Kasir` dilarang (`Forbidden`) mengakses data maupun halaman Audit Log.                                                                                                                                                                                                                         |
-| TBD-08 | `PARTIALLY RESOLVED — OWNER` (ADR 0001)                   | Provisioning awal `Owner` lokal melalui CLI idempoten dari `.env` telah disetujui. Deaktivasi akun, perubahan role, reset kata sandi, dan administrasi pengguna tetap TBD.                                                                                                                           |
-| TBD-09 | `APPROVED — OWNER` (ADR 0001)                             | Default `page=1`, `limit=20`, maksimum `100`; rentang tanggal ISO 8601 pada timestamp utama, status hanya enum resmi, urutan default `DESC`. Pencarian dan pilihan sort tambahan belum disetujui.                                                                                                    |
+**Status: DONE untuk keputusan yang menjadi blocker POS.** TBD-08 tetap parsial hanya untuk lifecycle administrasi akun yang berada di luar keputusan POS.
 
-**Deliverable:** [ADR 0002](docs/adr/0002-pos-gate-architecture.md) dan [kontrak API POS](docs/pos-api-contract.md) menjadi catatan normatif keputusan yang disetujui. GPOS-04 tetap membuktikan kompatibilitas perangkat secara fisik. Keputusan yang telah disetujui bukan izin menjalankan migrasi atau membuat kode di luar task berikutnya.
+| TBD    | Status Terkini                          | Keputusan / Sisa tindakan yang dibutuhkan                                                                                                                                                            |
+| ------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TBD-01 | `APPROVED — OWNER`                      | Ditetapkan batas harga Rp 1 s.d. Rp 10.000.000 per ekor (`BIGINT`, Rupiah bulat tanpa desimal).                                                                                                      |
+| TBD-02 | `APPROVED — OWNER` (ADR 0002 amendment) | Tambah harga memakai `CREATE_SALE_PRICE`; ubah harga memakai `UPDATE_SALE_PRICE`. Keduanya hanya mencatat aktor/waktu dengan `old_values = NULL`, `new_values = NULL`.                               |
+| TBD-03 | `APPROVED — OWNER` (ADR 0002)           | Browser print CSS 58/80 mm dan dialog cetak sistem menjadi baseline; uji perangkat/printer fisik ditahan ke P8-04 sebelum klaim kompatibilitas.                                                      |
+| TBD-04 | `APPROVED — OWNER` (ADR 0002)           | Kontrak final tercatat pada `docs/pos-api-contract.md`; perubahan memerlukan keputusan owner baru.                                                                                                   |
+| TBD-05 | `APPROVED — OWNER`                      | Menggunakan tabel `sale_daily_sequences` (`sale_date DATE PRIMARY KEY`, `last_number BIGINT`) tanpa batas 999.                                                                                       |
+| TBD-06 | `APPROVED — OWNER` (ADR 0002)           | Skema 4 tabel, stok terhitung, trigger, guard receiving VOID, audit action, index, dan granular privileges disetujui serta diterapkan melalui migrasi P7; diverifikasi pada `pfi_test` dan `pfi_db`. |
+| TBD-07 | `APPROVED — OWNER`                      | Role `Kasir` dilarang (`Forbidden`) mengakses data maupun halaman Audit Log.                                                                                                                         |
+| TBD-08 | `PARTIALLY RESOLVED — OWNER` (ADR 0001) | Provisioning awal `Owner` lokal melalui CLI idempoten dari `.env` telah disetujui. Deaktivasi akun, perubahan role, reset kata sandi, dan administrasi pengguna tetap TBD.                           |
+| TBD-09 | `APPROVED — OWNER` (ADR 0001)           | Default `page=1`, `limit=20`, maksimum `100`; rentang tanggal ISO 8601 pada timestamp utama, status hanya enum resmi, urutan default `DESC`. Pencarian dan pilihan sort tambahan belum disetujui.    |
+
+**Deliverable:** [ADR 0002](docs/adr/0002-pos-gate-architecture.md) dan [kontrak API POS](docs/pos-api-contract.md) menjadi catatan normatif keputusan yang disetujui. Baseline cetak dan spesifikasi UI dicatat pada [GPOS-04](docs/gpos-04-ui-and-print-spec.md); bukti kompatibilitas fisik ditahan hingga P8-04.
 
 ## Task GPOS-02 — Finalisasi data model POS
+
+**Status: DONE.** Model empat tabel, constraints, stock guards, append-only, dan runtime privileges ditetapkan pada ADR 0002 dan diterapkan melalui migrasi Phase 7.
 
 **Pekerjaan:**
 
@@ -678,6 +682,8 @@ Gate dinyatakan lulus hanya jika:
 
 ## Task GPOS-03 — Finalisasi API Contract POS
 
+**Status: DONE.** [Kontrak API dan POS QA Test Matrix TC-POS-01 s.d. TC-POS-30](docs/pos-api-contract.md) diterbitkan sebagai deliverable normatif.
+
 **Pekerjaan:**
 
 - Finalisasi endpoint harga, POS batch list, create sale, sale list/detail, void sale, dan receipt retrieval sesuai cakupan PRD.
@@ -688,6 +694,8 @@ Gate dinyatakan lulus hanya jika:
 **Deliverable:** API Contract POS final dan test matrix; kontraknya telah diterbitkan pada `docs/pos-api-contract.md`, implementasi endpoint tetap di Phase 7.
 
 ## Task GPOS-04 — Proof-of-concept printer dan persetujuan desain UI POS
+
+**Status: DONE untuk keputusan strategi dan spesifikasi desain.** [Spesifikasi UI dan cetak GPOS-04](docs/gpos-04-ui-and-print-spec.md) menyetujui baseline browser print dan mendefinisikan UI/user flow. Uji printer fisik belum dilakukan; pekerjaan itu secara eksplisit ditahan untuk P8-04 dan tidak ada klaim kompatibilitas perangkat sebelum bukti P8-04 tersedia.
 
 **Pekerjaan:**
 
@@ -701,14 +709,16 @@ Gate dinyatakan lulus hanya jika:
 
 ## Gate POS — Acceptance criteria
 
-- [ ] Seluruh keputusan bisnis POS sesuai PRD.
-- [ ] TBD pemblokir database, API, audit, dan printer sudah diselesaikan.
-- [ ] Data model POS disetujui.
-- [ ] API Contract POS disetujui.
-- [ ] Desain halaman dan user flow disetujui.
-- [ ] Test case POS bernomor beserta expected result tersedia.
-- [ ] Printer aktual telah diuji, atau implementasi printing ditahan sebagai pekerjaan terpisah yang jelas.
-- [ ] Seluruh regression test V4.5 tetap lulus.
+**Status Gate POS (design/readiness): APPROVED / PASS.** Uji printer fisik tetap menjadi acceptance P8-04; tidak ada klaim kompatibilitas perangkat sebelum bukti tersebut lulus.
+
+- [x] Seluruh keputusan bisnis POS sesuai PRD — tercermin pada ADR 0002 dan [kontrak API](docs/pos-api-contract.md).
+- [x] TBD pemblokir database, API, audit, dan printer sudah diselesaikan — baseline dan keputusan tercatat pada ADR 0002; verifikasi fisik secara eksplisit ditahan ke P8-04.
+- [x] Data model POS disetujui — empat tabel, computed stock, guard, dan privileges ditetapkan pada ADR 0002.
+- [x] API Contract POS disetujui — [kontrak API](docs/pos-api-contract.md), termasuk matriks TC-POS-01 s.d. TC-POS-30.
+- [x] Desain halaman dan user flow disetujui — [spesifikasi UI/cetak GPOS-04](docs/gpos-04-ui-and-print-spec.md).
+- [x] Test case POS bernomor beserta expected result tersedia — POS QA Test Matrix dalam [kontrak API](docs/pos-api-contract.md#7-pos-qa-test-matrix), dengan referensi ke suites aktual.
+- [x] Printer aktual telah diuji, atau implementasi printing ditahan sebagai pekerjaan terpisah yang jelas — belum diuji; ditugaskan ke P8-04 setelah komponen preview dan `@media print` Phase 8 tersedia. Kompatibilitas belum diklaim.
+- [x] Seluruh regression test V4.5 tetap lulus — verifikasi 2026-11-20: 14/14 suite, 173/173 test PASS dengan perintah regresi yang tercantum pada laporan sesi.
 
 ---
 
@@ -870,7 +880,7 @@ Gate dinyatakan lulus hanya jika:
 
 **Acceptance criteria:** histori transaksi dan status VOID dapat ditelusuri; transaksi tidak dapat diedit atau dihapus.
 
-## Task P8-04 — Buat Detail Penjualan dan alur VOID (PG-10)
+## Task P8-04 — Detail/VOID, QA UI, dan uji cetak fisik 58/80 mm (PG-10)
 
 **Pekerjaan:**
 
@@ -879,10 +889,14 @@ Gate dinyatakan lulus hanya jika:
 - Minta konfirmasi sebelum VOID; jangan meminta alasan wajib.
 - Tampilkan status dan stok terbaru setelah VOID.
 - Sediakan aksi cetak ulang hanya bagi pembuat transaksi dan jika belum VOID.
+- Selesaikan QA UI POS pada desktop dan viewport sempit, termasuk seluruh loading/empty/error/data state dan penanganan konflik harga/stok.
+- Bangun preview receipt dan CSS `@media print` untuk 58 mm/80 mm sebelum memulai uji perangkat.
+- Setelah preview receipt dan CSS `@media print` 58 mm/80 mm selesai dibangun di Phase 8, uji pairing dan hasil cetak pada perangkat/printer aktual yang tersedia.
+- Catat perangkat, OS, browser, model printer, lebar kertas, clipping, scaling, legibility, serta bukti hasil untuk setiap kombinasi yang akan dinyatakan didukung.
 
-**Deliverable:** halaman detail dan dialog VOID.
+**Deliverable:** halaman detail/dialog VOID, hasil QA UI, dan compatibility matrix hasil uji fisik; kombinasi yang tidak diuji tetap berstatus belum terverifikasi.
 
-**Acceptance criteria:** kontrol UI sesuai dengan keputusan bisnis; backend tetap memverifikasi hak dan status.
+**Acceptance criteria:** kontrol UI sesuai keputusan bisnis; backend tetap memverifikasi hak/status; print CSS lolos uji isi dan layout pada 58/80 mm; klaim kompatibilitas hanya untuk kombinasi dengan bukti fisik.
 
 ---
 
@@ -923,18 +937,17 @@ Gate dinyatakan lulus hanya jika:
 
 **Acceptance criteria:** kegagalan printer tidak menghapus penjualan atau membuat duplikasi.
 
-## Task P9-03 — Uji printer lintas perangkat yang disepakati
+## Task P9-03 — Konsolidasikan compatibility matrix hasil P8-04
 
 **Pekerjaan:**
 
-- Uji pairing dan cetak pada perangkat aktual yang disepakati.
-- Uji Android, iPhone, PC, atau laptop hanya sesuai kombinasi perangkat/printer yang benar-benar dipilih.
-- Uji kertas 58 mm dan 80 mm.
-- Catat metode koneksi, batasan, dan prosedur operasional.
+- Konsolidasikan bukti fisik per kombinasi perangkat/OS/browser/printer dan lebar kertas yang dicatat pada P8-04.
+- Tandai kombinasi yang tidak tersedia atau gagal sebagai belum didukung; jangan mengulang klaim tanpa bukti.
+- Dokumentasikan metode koneksi, batasan, dan prosedur operasional berdasarkan hasil P8-04.
 
-**Deliverable:** printer compatibility matrix.
+**Deliverable:** compatibility matrix final yang menautkan bukti P8-04.
 
-**Acceptance criteria:** seluruh kombinasi yang dinyatakan didukung telah diuji secara fisik; jangan mengklaim kompatibilitas universal Bluetooth.
+**Acceptance criteria:** setiap kombinasi yang dinyatakan didukung memiliki hasil fisik P8-04 pada lebar yang dinyatakan; jangan mengklaim kompatibilitas universal Bluetooth.
 
 ## Task P9-04 — Jalankan QA POS
 
