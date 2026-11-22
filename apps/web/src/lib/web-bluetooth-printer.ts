@@ -102,7 +102,10 @@ export async function printViaWebBluetooth(bytes: Uint8Array): Promise<void> {
       }
     }
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith("Printer tidak menyediakan")) {
+    if (
+      error instanceof Error &&
+      error.message.startsWith("Printer tidak menyediakan")
+    ) {
       throw error;
     }
     throw new Error(

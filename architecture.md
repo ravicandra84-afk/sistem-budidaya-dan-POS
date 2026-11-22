@@ -5,8 +5,8 @@
 | Informasi         | Nilai                                                                                                     |
 | ----------------- | --------------------------------------------------------------------------------------------------------- |
 | Dokumen           | `architecture.md`                                                                                         |
-| Versi             | 1.0                                                                                                       |
-| Status            | Baseline Arsitektur MVP (V4.5 Locked + Perluasan POS & Keputusan Pemilik Produk)                          |
+| Versi             | 1.1                                                                                                       |
+| Status            | Baseline V4.5 Locked dengan addendum arsitektur V4.6 pasca-MVP yang disetujui Owner                       |
 | Produk            | Sistem Manajemen Operasional Pisciculture Farm Indonesia (PFI)                                            |
 | Cakupan           | Keseluruhan MVP: Penerimaan Ikan, Manajemen Batch, dan Ikan Keluar (Kasir/POS)                            |
 | Zona Waktu Bisnis | `Asia/Jakarta` ($\text{UTC}+7$)                                                                           |
@@ -142,15 +142,21 @@ Sistem mengenali empat role utama: `Owner`, `Admin Operasional`, `Kepala Budiday
 | **Cetak Ulang Struk (Milik Sendiri, Non-VOID)** |     Diizinkan     |        Diizinkan        |                   Ditolak                   |         Diizinkan         | `LOCKED — BUSINESS`                               |
 | **Cetak Ulang Struk (Milik Pengguna Lain)**     |      Ditolak      |         Ditolak         |                   Ditolak                   |          Ditolak          | `LOCKED — BUSINESS`                               |
 
+### 3.2.1 Tambahan RBAC V4.6 (`APPROVED — OWNER`)
+
+- `Kepala Budidaya` dan `Owner` boleh mengubah `batches.sale_readiness` ke atau dari `BELUM_SIAP`/`SIAP_JUAL`. Hak ini tidak mengizinkan perubahan `batches.status`.
+- Owner dan `Admin Operasional` boleh mengelola kategori/produk POS, termasuk menambah, mengubah, dan mengarsipkan melalui `is_active = false`. Istilah Admin pada keputusan V4.6 dipetakan ke role aktif `Admin Operasional`; tidak ada role baru.
+- Seluruh otorisasi wajib ditegakkan backend berdasarkan JWT terverifikasi. Runtime database hanya memperoleh privilege kolom minimum yang dibutuhkan.
+
 ### 3.3 Keamanan Lapisan Database (Least Privilege & Immutability)
 
 Arsitektur database memisahkan dua peran koneksi PostgreSQL:
 
 1. **Migration Role (DDL):** Digunakan hanya saat deployment migrasi skema dan _seeding_ awal (`CREATE`, `ALTER`, `DROP`, `TRIGGER`, `GRANT`).
 2. **App Runtime Role (DML Granular):** Digunakan oleh layanan backend saat runtime dengan hak akses terbatas:
-   - **Tabel Append-Only (`incoming_fish`, `incoming_fish_voids`, `audit_logs`, serta perluasan POS `fish_sales`, `fish_sale_voids`):** Hanya memiliki hak `SELECT` dan `INSERT`. Hak `UPDATE` dan `DELETE` dicabut secara mutlak.
+   - **Tabel Append-Only:** `incoming_fish`, `incoming_fish_voids`, `audit_logs`, `fish_sales`, `fish_sale_voids`, dan `batch_sale_readiness_histories` hanya memiliki hak `SELECT` dan `INSERT`; hak `UPDATE` dan `DELETE` dicabut.
    - **Proteksi Trigger:** Trigger `BEFORE UPDATE OR DELETE` dipasang pada seluruh tabel append-only untuk melemparkan `EXCEPTION` apabila ada upaya modifikasi atau penghapusan baris historis dari jalur koneksi mana pun.
-   - **Tabel Sequence, Katalog Harga & Status Terkendali:** Sesuai keputusan eksplisit ADR 0001, `batch_daily_sequences` memiliki `SELECT`, `INSERT`, dan `UPDATE` terbatas pada kolom `last_number`; `batches` memiliki `SELECT`, `INSERT`, dan `UPDATE` terbatas pada kolom `status`. `idempotency_keys` hanya dapat di-`UPDATE` pada `status`, `response_status`, `response_body`, dan `completed_at`. Hak POS telah dikunci dalam ADR 0002; grants POS belum diterapkan dan hanya dibuat melalui task implementasi database yang disetujui.
+   - **Tabel Sequence, Katalog & Status Terkendali:** `batch_daily_sequences` memiliki `SELECT`, `INSERT`, dan `UPDATE` terbatas pada `last_number`; pada V4.6, `batches` menambah grant UPDATE kolom `sale_readiness` terpisah dari `status`. `product_categories` dan `products` menerima grants granular sesuai aksi katalog. `idempotency_keys` hanya dapat di-`UPDATE` pada `status`, `response_status`, `response_body`, dan `completed_at`. Grants final ditetapkan pada P8-01.
 
 ---
 
@@ -464,6 +470,33 @@ stateDiagram-v2
 ```
 
 ---
+
+## 4.5 Addendum V4.6 — Kesiapan Jual dan Katalog Multi-Produk (`APPROVED — OWNER`)
+
+Addendum ini memperluas POS setelah MVP. Aturan V4.5 dan trigger siklus hidup batch tetap dipertahankan.
+
+### Kesiapan jual batch
+
+- `batches.status` tetap memiliki nilai `active`, `completed`, dan `voided`; tidak ada nilai budidaya baru yang dimasukkan ke kolom ini.
+- Tambahkan `sale_readiness VARCHAR(20) NOT NULL DEFAULT 'BELUM_SIAP' CHECK (sale_readiness IN ('BELUM_SIAP', 'SIAP_JUAL'))`. Nilai awal batch lama maupun baru adalah `BELUM_SIAP`.
+- `sale_readiness` tidak mengubah, menggantikan, atau memperlonggar `guard_batch_status_transition()` V4.5. Batch dapat dijual hanya jika `status = 'active'`, kesiapan `SIAP_JUAL`, dan stok hasil hitung lebih dari nol.
+- `batch_sale_readiness_histories` adalah tabel append-only dengan `id UUID`, `batch_id UUID` FK ke `batches`, `from_readiness` nullable, `to_readiness`, `changed_by UUID` FK ke `users`, `note VARCHAR` nullable, dan `created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP`. Setiap perubahan kesiapan dan penulisan histori terjadi dalam satu transaksi.
+- Backend membatasi perubahan kesiapan ke `Owner` dan `Kepala Budidaya`; actor selalu berasal dari JWT. Runtime tidak boleh UPDATE/DELETE tabel histori.
+
+### Kategori dan produk POS
+
+- Tambahkan `product_categories`: UUIDv4, nama unik, kode/slug unik, `requires_batch`, `is_active`, serta `created_at`/`updated_at`. Kategori awal dapat meliputi Benih Ikan, Ikan Konsumsi, Pakan & Nutrisi, Obat & Probiotik, dan Sarana Budidaya.
+- Tambahkan `products`: UUIDv4, `category_id`, SKU unik, nama, `tracking_mode` (`BATCH_TRACKED` atau `NON_BATCH`), `species_id` nullable yang merujuk ke `fish_species`, `fish_size` nullable, `unit`, `unit_price NUMERIC(12,2) CHECK (unit_price > 0 AND unit_price <= 10000000.00)`, `stock_quantity NUMERIC(12,2)` nullable untuk `NON_BATCH`, `is_active`, serta `created_at`/`updated_at`.
+- Produk `BATCH_TRACKED` wajib konsisten dengan kategori `requires_batch = true`, species dan ukuran terisi, dan stok diperoleh dari agregasi batch `active`/`SIAP_JUAL`; produk `NON_BATCH` harus `requires_batch = false`, tidak menunjuk batch, dan memakai stok produk langsung. Invariant ini ditegakkan backend dan database sesuai kemampuan constraint.
+- Produk/kategori diarsipkan dengan `is_active = false`, bukan dihapus. Mutasi katalog memakai aktor JWT, RBAC Owner/Admin Operasional, transaksi atomik, dan audit append-only. Nama action audit khusus V4.6 dikunci di P8-02 sebelum penerapan.
+
+### Transaksi dan kompatibilitas
+
+- `fish_sales` tetap append-only. Tambahkan `product_id` nullable FK ke `products` untuk menjaga data lama; transaksi baru wajib memiliki produk. Ubah `batch_id` menjadi nullable: wajib untuk `BATCH_TRACKED`, harus NULL untuk `NON_BATCH`.
+- Nomor harian `sale_daily_sequences` dan sembilan field struk resmi tetap dipertahankan. Harga katalog dua-desimal memerlukan snapshot nominal yang dapat menyimpan dua desimal; P8-01 harus melakukan migrasi tipe secara non-destruktif dengan mempertahankan nilai histori V4.5.
+- Untuk `BATCH_TRACKED`, pembuatan penjualan mengunci batch dengan `SELECT ... FOR UPDATE`, lalu memvalidasi ulang status aktif, kesiapan `SIAP_JUAL`, stok, harga, dan pembayaran sebelum insert. Untuk `NON_BATCH`, backend mengunci baris produk dan memvalidasi stok produk pada transaksi yang sama.
+- VOID tetap berupa reversal append-only. Pemulihan stok `NON_BATCH`, aturan jumlah desimal per unit, dan pemetaan identitas produk non-batch ke sembilan slot struk harus ditetapkan dan diuji di P8-02 sebelum backend dirilis.
+- Endpoint V4.6 untuk membuat penjualan adalah `POST /api/v1/sales`. Detail request/response, route katalog, audit action, idempotency, dan kompatibilitas dengan route V4.5 `/api/v1/pos/*` dikunci di P8-02; kontrak V4.5 tetap menjadi acuan bagi klien lama selama transisi.
 
 ## 5. Alur Data dan Mekanisme Transaksi Atomik
 

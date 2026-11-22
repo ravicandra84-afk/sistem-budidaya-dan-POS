@@ -5,8 +5,8 @@
 | Informasi         | Nilai                                                                        |
 | ----------------- | ---------------------------------------------------------------------------- |
 | Dokumen           | `implementation_plan.md`                                                     |
-| Versi             | 1.0                                                                          |
-| Status            | Draft rencana eksekusi berdasarkan PRD 1.0 dan Master Blueprint V4.5         |
+| Versi             | 1.1                                                                          |
+| Status            | Roadmap MVP V4.5 dengan Phase 8 V4.6 pasca-MVP yang disetujui Owner          |
 | Produk            | Sistem Manajemen Operasional Pisciculture Farm Indonesia (PFI)               |
 | Zona waktu bisnis | `Asia/Jakarta` (UTC+7)                                                       |
 | Basis database    | PostgreSQL 13+                                                               |
@@ -164,9 +164,14 @@ Phase 9  Struk, printer, integrasi, dan QA POS
    |
    v
 Phase 10 Release, deployment, backup, monitoring, dan handover
+   |
+   v
+Phase 8 V4.6 (jalur pasca-MVP terpisah; task aktif P8-01)
 ```
 
 **Dependency wajib:** Phase 7–9 tidak boleh dimulai untuk implementasi final sebelum Gate POS dinyatakan lulus. Pekerjaan discovery atau proof-of-concept printer boleh dilakukan sebelumnya, tetapi tidak boleh menetapkan integrasi final tanpa keputusan perangkat.
+
+**Pemisahan versi:** Phase 8 frontend pada jalur MVP di bawah adalah V4.5 dan memakai alias task `P8-MVP-*`. Phase 8 V4.6 adalah jalur pasca-MVP yang dimulai setelah release MVP; penomorannya mengikuti persetujuan Owner 2026-11-22.
 
 ---
 
@@ -654,7 +659,7 @@ Gate dinyatakan lulus hanya jika:
 | ------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | TBD-01 | `APPROVED — OWNER`                      | Ditetapkan batas harga Rp 1 s.d. Rp 10.000.000 per ekor (`BIGINT`, Rupiah bulat tanpa desimal).                                                                                                      |
 | TBD-02 | `APPROVED — OWNER` (ADR 0002 amendment) | Tambah harga memakai `CREATE_SALE_PRICE`; ubah harga memakai `UPDATE_SALE_PRICE`. Keduanya hanya mencatat aktor/waktu dengan `old_values = NULL`, `new_values = NULL`.                               |
-| TBD-03 | `APPROVED — OWNER` (ADR 0002)           | Browser print CSS 58/80 mm dan dialog cetak sistem menjadi baseline; uji perangkat/printer fisik ditahan ke P8-04 sebelum klaim kompatibilitas.                                                      |
+| TBD-03 | `APPROVED — OWNER` (ADR 0002)           | Browser print CSS 58/80 mm dan dialog cetak sistem menjadi baseline; uji perangkat/printer fisik ditahan ke P8-MVP-04 sebelum klaim kompatibilitas.                                                  |
 | TBD-04 | `APPROVED — OWNER` (ADR 0002)           | Kontrak final tercatat pada `docs/pos-api-contract.md`; perubahan memerlukan keputusan owner baru.                                                                                                   |
 | TBD-05 | `APPROVED — OWNER`                      | Menggunakan tabel `sale_daily_sequences` (`sale_date DATE PRIMARY KEY`, `last_number BIGINT`) tanpa batas 999.                                                                                       |
 | TBD-06 | `APPROVED — OWNER` (ADR 0002)           | Skema 4 tabel, stok terhitung, trigger, guard receiving VOID, audit action, index, dan granular privileges disetujui serta diterapkan melalui migrasi P7; diverifikasi pada `pfi_test` dan `pfi_db`. |
@@ -662,7 +667,7 @@ Gate dinyatakan lulus hanya jika:
 | TBD-08 | `PARTIALLY RESOLVED — OWNER` (ADR 0001) | Provisioning awal `Owner` lokal melalui CLI idempoten dari `.env` telah disetujui. Deaktivasi akun, perubahan role, reset kata sandi, dan administrasi pengguna tetap TBD.                           |
 | TBD-09 | `APPROVED — OWNER` (ADR 0001)           | Default `page=1`, `limit=20`, maksimum `100`; rentang tanggal ISO 8601 pada timestamp utama, status hanya enum resmi, urutan default `DESC`. Pencarian dan pilihan sort tambahan belum disetujui.    |
 
-**Deliverable:** [ADR 0002](docs/adr/0002-pos-gate-architecture.md) dan [kontrak API POS](docs/pos-api-contract.md) menjadi catatan normatif keputusan yang disetujui. Baseline cetak dan spesifikasi UI dicatat pada [GPOS-04](docs/gpos-04-ui-and-print-spec.md); bukti kompatibilitas fisik ditahan hingga P8-04.
+**Deliverable:** [ADR 0002](docs/adr/0002-pos-gate-architecture.md) dan [kontrak API POS](docs/pos-api-contract.md) menjadi catatan normatif keputusan yang disetujui. Baseline cetak dan spesifikasi UI dicatat pada [GPOS-04](docs/gpos-04-ui-and-print-spec.md); bukti kompatibilitas fisik ditahan hingga P8-MVP-04.
 
 ## Task GPOS-02 — Finalisasi data model POS
 
@@ -695,7 +700,7 @@ Gate dinyatakan lulus hanya jika:
 
 ## Task GPOS-04 — Proof-of-concept printer dan persetujuan desain UI POS
 
-**Status: DONE untuk keputusan strategi dan spesifikasi desain.** [Spesifikasi UI dan cetak GPOS-04](docs/gpos-04-ui-and-print-spec.md) menyetujui baseline browser print dan mendefinisikan UI/user flow. Uji printer fisik belum dilakukan; pekerjaan itu secara eksplisit ditahan untuk P8-04 dan tidak ada klaim kompatibilitas perangkat sebelum bukti P8-04 tersedia.
+**Status: DONE untuk keputusan strategi dan spesifikasi desain.** [Spesifikasi UI dan cetak GPOS-04](docs/gpos-04-ui-and-print-spec.md) menyetujui baseline browser print dan mendefinisikan UI/user flow. Uji printer fisik belum dilakukan; pekerjaan itu secara eksplisit ditahan untuk P8-MVP-04 dan tidak ada klaim kompatibilitas perangkat sebelum bukti P8-MVP-04 tersedia.
 
 **Pekerjaan:**
 
@@ -709,15 +714,15 @@ Gate dinyatakan lulus hanya jika:
 
 ## Gate POS — Acceptance criteria
 
-**Status Gate POS (design/readiness): APPROVED / PASS.** Uji printer fisik tetap menjadi acceptance P8-04; tidak ada klaim kompatibilitas perangkat sebelum bukti tersebut lulus.
+**Status Gate POS (design/readiness): APPROVED / PASS.** Uji printer fisik tetap menjadi acceptance P8-MVP-04; tidak ada klaim kompatibilitas perangkat sebelum bukti tersebut lulus.
 
 - [x] Seluruh keputusan bisnis POS sesuai PRD — tercermin pada ADR 0002 dan [kontrak API](docs/pos-api-contract.md).
-- [x] TBD pemblokir database, API, audit, dan printer sudah diselesaikan — baseline dan keputusan tercatat pada ADR 0002; verifikasi fisik secara eksplisit ditahan ke P8-04.
+- [x] TBD pemblokir database, API, audit, dan printer sudah diselesaikan — baseline dan keputusan tercatat pada ADR 0002; verifikasi fisik secara eksplisit ditahan ke P8-MVP-04.
 - [x] Data model POS disetujui — empat tabel, computed stock, guard, dan privileges ditetapkan pada ADR 0002.
 - [x] API Contract POS disetujui — [kontrak API](docs/pos-api-contract.md), termasuk matriks TC-POS-01 s.d. TC-POS-30.
 - [x] Desain halaman dan user flow disetujui — [spesifikasi UI/cetak GPOS-04](docs/gpos-04-ui-and-print-spec.md).
 - [x] Test case POS bernomor beserta expected result tersedia — POS QA Test Matrix dalam [kontrak API](docs/pos-api-contract.md#7-pos-qa-test-matrix), dengan referensi ke suites aktual.
-- [x] Printer aktual telah diuji, atau implementasi printing ditahan sebagai pekerjaan terpisah yang jelas — belum diuji; ditugaskan ke P8-04 setelah komponen preview dan `@media print` Phase 8 tersedia. Kompatibilitas belum diklaim.
+- [x] Printer aktual telah diuji, atau implementasi printing ditahan sebagai pekerjaan terpisah yang jelas — belum diuji; ditugaskan ke P8-MVP-04 setelah komponen preview dan `@media print` Phase 8 tersedia. Kompatibilitas belum diklaim.
 - [x] Seluruh regression test V4.5 tetap lulus — verifikasi 2026-11-20: 14/14 suite, 173/173 test PASS dengan perintah regresi yang tercantum pada laporan sesi.
 
 ---
@@ -832,11 +837,11 @@ Gate dinyatakan lulus hanya jika:
 
 ---
 
-# 13. Phase 8 — Frontend POS
+# 13. Phase 8 MVP V4.5 — Frontend POS
 
 **Prasyarat:** API Contract POS dan API backend terkait sudah stabil pada environment test.
 
-## Task P8-01 — Buat halaman POS/Kasir (PG-07)
+## Task P8-MVP-01 — Buat halaman POS/Kasir (PG-07)
 
 **Pekerjaan:**
 
@@ -854,7 +859,7 @@ Gate dinyatakan lulus hanya jika:
 
 **Acceptance criteria:** semua aturan pembayaran, harga, stok, dan satu batch per transaksi dipatuhi UI dan backend.
 
-## Task P8-02 — Buat halaman Daftar Harga (PG-08)
+## Task P8-MVP-02 — Buat halaman Daftar Harga (PG-08)
 
 **Pekerjaan:**
 
@@ -868,7 +873,7 @@ Gate dinyatakan lulus hanya jika:
 
 **Acceptance criteria:** UI selaras dengan RBAC backend; perubahan katalog tidak memengaruhi histori transaksi.
 
-## Task P8-03 — Buat halaman Daftar Penjualan (PG-09)
+## Task P8-MVP-03 — Buat halaman Daftar Penjualan (PG-09)
 
 **Pekerjaan:**
 
@@ -880,7 +885,7 @@ Gate dinyatakan lulus hanya jika:
 
 **Acceptance criteria:** histori transaksi dan status VOID dapat ditelusuri; transaksi tidak dapat diedit atau dihapus.
 
-## Task P8-04 — Detail/VOID, QA UI, dan uji cetak fisik 58/80 mm (PG-10)
+## Task P8-MVP-04 — Detail/VOID, QA UI, dan uji cetak fisik 58/80 mm (PG-10)
 
 **Pekerjaan:**
 
@@ -937,19 +942,19 @@ Gate dinyatakan lulus hanya jika:
 
 **Acceptance criteria:** kegagalan printer tidak menghapus penjualan atau membuat duplikasi.
 
-## Task P9-03 — Konsolidasikan compatibility matrix hasil P8-04
+## Task P9-03 — Konsolidasikan compatibility matrix hasil P8-MVP-04
 
 **Status: DONE.** [Compatibility Matrix Final Cetak Struk POS (58 mm & 80 mm)](docs/gpos-04-ui-and-print-spec.md) memisahkan simulasi CSS Playwright yang terverifikasi dari semua kombinasi fisik yang berstatus `UNVERIFIED — NOT SUPPORTED WITHOUT PHYSICAL TEST`. Tidak ada klaim kompatibilitas printer atau Bluetooth tanpa uji dan tanda tangan bukti aktual.
 
 **Pekerjaan:**
 
-- Konsolidasikan bukti fisik per kombinasi perangkat/OS/browser/printer dan lebar kertas yang dicatat pada P8-04.
+- Konsolidasikan bukti fisik per kombinasi perangkat/OS/browser/printer dan lebar kertas yang dicatat pada P8-MVP-04.
 - Tandai kombinasi yang tidak tersedia atau gagal sebagai belum didukung; jangan mengulang klaim tanpa bukti.
-- Dokumentasikan metode koneksi, batasan, dan prosedur operasional berdasarkan hasil P8-04.
+- Dokumentasikan metode koneksi, batasan, dan prosedur operasional berdasarkan hasil P8-MVP-04.
 
-**Deliverable:** compatibility matrix final yang menautkan bukti P8-04.
+**Deliverable:** compatibility matrix final yang menautkan bukti P8-MVP-04.
 
-**Acceptance criteria:** setiap kombinasi yang dinyatakan didukung memiliki hasil fisik P8-04 pada lebar yang dinyatakan; jangan mengklaim kompatibilitas universal Bluetooth.
+**Acceptance criteria:** setiap kombinasi yang dinyatakan didukung memiliki hasil fisik P8-MVP-04 pada lebar yang dinyatakan; jangan mengklaim kompatibilitas universal Bluetooth.
 
 ## Task P9-04 — Jalankan QA POS
 
@@ -1033,6 +1038,40 @@ Gate dinyatakan lulus hanya jika:
 **Deliverable:** user guide, runbook, dan catatan handover.
 
 **Acceptance criteria:** pengguna operasional dapat menjalankan fungsi sesuai role dan mengetahui langkah saat terjadi kegagalan.
+
+---
+
+# Phase 8 V4.6 — Katalog Multi-Produk POS & Kesiapan Jual Batch
+
+**Status:** Dibuka berdasarkan persetujuan Owner 2026-11-22. Ini adalah Phase 8 pasca-MVP V4.6; task frontend MVP V4.5 di atas menggunakan alias `P8-MVP-*`. Referensi `P8-04` pada dokumen GPOS lama berarti `P8-MVP-04`.
+
+**Prasyarat:** Gate POS V4.5 lulus. Lifecycle batch `active | completed | voided`, trigger terkait, `fish_sales` append-only, sequence harian, dan sembilan field struk harus tetap kompatibel.
+
+## Task P8-01 — Skema & Migrasi Database (**SELESAI**)
+
+**Scope:** menambahkan readiness terpisah dan tabel histori; kategori/produk katalog; relasi produk dan batch nullable yang aman untuk histori; constraint, index, trigger/grants/audit append-only; serta migrasi data harga lama yang tidak merusak transaksi.
+
+**Acceptance criteria:** data `fish_sales` lama tetap terbaca dan tidak berubah; lifecycle/trigger V4.5 tidak diubah; batch lama ber-default `BELUM_SIAP`; harga lama dipetakan tanpa menghapus katalog asal; migrasi diterapkan pada PostgreSQL development lokal; Prisma schema dan generated client konsisten. Automated API/V4.5 regression tetap wajib sebelum rilis V4.6 dan dijalankan pada P8-02/QA.
+
+**Status:** `DONE` — 2026-11-22. Schema valid, dua migrasi V4.6 applied pada `pfi_db`, Prisma Client generated, 3 histori penjualan lama tetap terbaca, dan 2 harga lama ter-backfill ke produk. Trigger lifecycle V4.5 dan append-only `fish_sales` terverifikasi tetap aktif. Automated API/regression tests belum dijalankan karena adaptasi service adalah scope P8-02.
+
+## Task P8-02 — Backend API & RBAC Katalog + Gerbang Siap Jual
+
+**Dependency:** P8-01 selesai.
+
+**Status:** `ACTIVE`.
+
+**Scope:** kontrak route katalog dan `/api/v1/sales`; validasi produk/harga/stok; role Owner/Admin Operasional untuk katalog; Owner/Kepala Budidaya untuk kesiapan batch; locking, idempotency, audit, append-only, VOID dan pemulihan stok non-batch; pemetaan sembilan field struk untuk produk non-batch.
+
+**Acceptance criteria:** transaksi batch hanya dari batch active dan `SIAP_JUAL`; penjualan non-batch memakai `batch_id = NULL`; akses lintas-role teruji; seluruh mutasi atomik/audited; kontrak tidak mengubah perilaku klien V4.5 sebelum transisi disetujui.
+
+## Task P8-03 — Frontend Manajemen Produk, Kontrol Siap Jual, & POS Kasir
+
+**Dependency:** P8-02 selesai dan kontrak API stabil di test.
+
+**Scope:** pengelolaan kategori/produk dan arsip; perubahan kesiapan batch untuk role yang berhak; POS untuk produk batch/non-batch; konfirmasi stok/harga; tampilan status dan struk sesuai sembilan field resmi.
+
+**Acceptance criteria:** UI mengikuti RBAC backend, menyediakan state loading/empty/error/success, meminta konfirmasi yang diwajibkan, dan tidak mengubah data transaksi historis.
 
 ---
 

@@ -304,9 +304,7 @@ test("thermal Bluetooth print sends all ESC/POS chunks and disconnects without r
   await setBluetoothBehavior(page);
   const api = await stubCashierSale(page);
 
-  await page
-    .getByRole("button", { name: "Cetak Thermal (Bluetooth)" })
-    .click();
+  await page.getByRole("button", { name: "Cetak Thermal (Bluetooth)" }).click();
   await expect(page.getByRole("status")).toContainText(
     "Struk berhasil dikirim ke printer Bluetooth",
   );

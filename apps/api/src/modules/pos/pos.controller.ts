@@ -39,6 +39,7 @@ import { Roles } from "../../common/auth/roles.decorator";
 import { RolesGuard } from "../../common/auth/roles.guard";
 import type { RequestWithId } from "../../common/http/request-id.middleware";
 import { ZodValidationPipe } from "../../common/validation/zod-validation.pipe";
+import { PosCatalogService } from "./pos-catalog.service";
 import { PosService } from "./pos.service";
 import { z } from "zod";
 
@@ -110,7 +111,7 @@ export class PosController {
 @Controller("pos/prices")
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class PosPricesController {
-  constructor(private readonly posService: PosService) {}
+  constructor(private readonly catalogService: PosCatalogService) {}
 
   @Get()
   @Roles(...POS_ROLES)
@@ -119,7 +120,7 @@ export class PosPricesController {
     query: PosPricesListQuery,
     @Req() request: RequestWithId,
   ) {
-    return this.posService.listPrices(query, request.requestId);
+    return this.catalogService.listLegacyPrices(query, request.requestId);
   }
 
   @Post()
@@ -131,7 +132,12 @@ export class PosPricesController {
     input: CreateSalePriceInput,
     @Req() request: RequestWithId,
   ) {
-    return this.posService.createPrice(user, input, idempotencyKey, request);
+    return this.catalogService.createLegacyPrice(
+      user,
+      input,
+      idempotencyKey,
+      request,
+    );
   }
 
   @Patch(":price_id")
@@ -144,7 +150,7 @@ export class PosPricesController {
     input: UpdateSalePriceInput,
     @Req() request: RequestWithId,
   ) {
-    return this.posService.updatePrice(
+    return this.catalogService.updateLegacyPrice(
       priceId,
       user,
       input,
@@ -176,5 +182,22 @@ export class PosBatchesController {
     @Req() request: RequestWithId,
   ) {
     return this.posService.getPosBatch(batchId, request.requestId);
+  }
+}
+
+@Controller("sales")
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class V46SalesController {
+  constructor(private readonly posService: PosService) {}
+
+  @Post()
+  @Roles(...POS_ROLES)
+  createSale(
+    @CurrentUser() user: AuthenticatedUser,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Body(new ZodValidationPipe(createSaleSchema)) input: CreateSaleInput,
+    @Req() request: RequestWithId,
+  ) {
+    return this.posService.createV46Sale(user, input, idempotencyKey, request);
   }
 }

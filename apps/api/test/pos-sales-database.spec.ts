@@ -27,6 +27,7 @@ databaseSuite("P7-03 PostgreSQL sale guards", () => {
   );
   const speciesCode = `P7-03-${randomUUID()}`;
   let speciesId: string;
+  let productId: string;
   let fixtureSequence = 0;
 
   beforeAll(async () => {
@@ -35,12 +36,32 @@ databaseSuite("P7-03 PostgreSQL sale guards", () => {
       select: { id: true },
     });
     speciesId = species.id;
+    const category = await prisma.productCategory.findUniqueOrThrow({
+      where: { code: "BENIH-IKAN" },
+      select: { id: true },
+    });
+    const product = await prisma.product.create({
+      data: {
+        categoryId: category.id,
+        sku: `P7-03-${randomUUID()}`,
+        name: "P7-03 Test 3-5 cm",
+        trackingMode: "BATCH_TRACKED",
+        species: "P7-03 Test",
+        sizeLabel: "3-5 cm",
+        unit: "EKOR",
+        unitPrice: new Prisma.Decimal("2500.00"),
+        stockQuantity: null,
+      },
+      select: { id: true },
+    });
+    productId = product.id;
   });
 
   afterAll(async () => {
     await prisma.$executeRaw`
       TRUNCATE TABLE
-        "audit_logs", "fish_sale_voids", "fish_sales", "fish_sale_prices",
+        "audit_logs", "batch_sale_readiness_histories", "fish_sale_voids",
+        "fish_sales", "products", "product_categories", "fish_sale_prices",
         "incoming_fish_voids", "incoming_fish", "batches", "idempotency_keys",
         "sale_daily_sequences", "batch_daily_sequences", "users", "fish_species"
       RESTART IDENTITY
@@ -83,6 +104,10 @@ databaseSuite("P7-03 PostgreSQL sale guards", () => {
           fishSize: "3-5 cm",
           createdBy: user.id,
         },
+      });
+      await transaction.batch.update({
+        where: { id: batch.id },
+        data: { saleReadiness: "SIAP_JUAL" },
       });
 
       return { batchId: batch.id, userId: user.id };
@@ -144,6 +169,10 @@ databaseSuite("P7-03 PostgreSQL sale guards", () => {
             createdBy: userId,
           },
         });
+        await transaction.batch.update({
+          where: { id: batch.id },
+          data: { saleReadiness: "SIAP_JUAL" },
+        });
 
         await operation(transaction, batch.id, userId);
         throw new Error(rollbackFixtureMessage);
@@ -170,12 +199,13 @@ databaseSuite("P7-03 PostgreSQL sale guards", () => {
     return {
       saleCode: `PFI-SAL-20000101-${String(fixtureSequence).padStart(3, "0")}`,
       batchId,
+      productId,
       quantity: 10,
-      unitPrice: 2500n,
-      totalAmount: 25000n,
+      unitPrice: new Prisma.Decimal("2500.00"),
+      totalPrice: new Prisma.Decimal("25000.00"),
       paymentMethod: "cash",
-      cashReceived: 30000n,
-      changeAmount: 5000n,
+      cashReceived: new Prisma.Decimal("30000.00"),
+      changeAmount: new Prisma.Decimal("5000.00"),
       createdBy: userId,
       ...overrides,
     };
@@ -207,12 +237,26 @@ databaseSuite("P7-03 PostgreSQL sale guards", () => {
     await withFixture(async (transaction, batchId, userId) => {
       const invalidSales = [
         { quantity: 0 },
-        { unitPrice: 10000001n, totalAmount: 100000010n },
-        { totalAmount: 25001n },
+        {
+          unitPrice: new Prisma.Decimal("10000001.00"),
+          totalPrice: new Prisma.Decimal("100000010.00"),
+        },
+        { totalPrice: new Prisma.Decimal("25001.00") },
         { paymentMethod: "cheque" },
-        { cashReceived: 24999n, changeAmount: -1n },
-        { paymentMethod: "transfer", cashReceived: 100n, changeAmount: null },
-        { paymentMethod: "transfer", cashReceived: null, changeAmount: 1n },
+        {
+          cashReceived: new Prisma.Decimal("24999.00"),
+          changeAmount: new Prisma.Decimal("-1.00"),
+        },
+        {
+          paymentMethod: "transfer",
+          cashReceived: new Prisma.Decimal("100.00"),
+          changeAmount: null,
+        },
+        {
+          paymentMethod: "transfer",
+          cashReceived: null,
+          changeAmount: new Prisma.Decimal("1.00"),
+        },
         { saleCode: "INVALID-SALE-CODE" },
       ];
 
@@ -278,9 +322,9 @@ databaseSuite("P7-03 PostgreSQL sale guards", () => {
     const sale = await runtime.fishSale.create({
       data: saleData(batchId, userId, {
         quantity: 100,
-        totalAmount: 250000n,
-        cashReceived: 250000n,
-        changeAmount: 0n,
+        totalPrice: new Prisma.Decimal("250000.00"),
+        cashReceived: new Prisma.Decimal("250000.00"),
+        changeAmount: new Prisma.Decimal("0.00"),
       }),
     });
     expect(await currentStock(batchId)).toBe(0);
@@ -290,9 +334,9 @@ databaseSuite("P7-03 PostgreSQL sale guards", () => {
       runtime.fishSale.create({
         data: saleData(batchId, userId, {
           quantity: 1,
-          totalAmount: 2500n,
-          cashReceived: 2500n,
-          changeAmount: 0n,
+          totalPrice: new Prisma.Decimal("2500.00"),
+          cashReceived: new Prisma.Decimal("2500.00"),
+          changeAmount: new Prisma.Decimal("0.00"),
         }),
       }),
     ).rejects.toThrow();
@@ -348,9 +392,9 @@ databaseSuite("P7-03 PostgreSQL sale guards", () => {
           data: saleData(batchId, userId, {
             saleCode,
             quantity: 60,
-            totalAmount: 150000n,
-            cashReceived: 150000n,
-            changeAmount: 0n,
+            totalPrice: new Prisma.Decimal("150000.00"),
+            cashReceived: new Prisma.Decimal("150000.00"),
+            changeAmount: new Prisma.Decimal("0.00"),
           }),
         });
       });
@@ -416,9 +460,9 @@ databaseSuite("P7-03 PostgreSQL sale guards", () => {
       return transaction.fishSale.create({
         data: saleData(batchId, userId, {
           quantity: 60,
-          totalAmount: 150000n,
-          cashReceived: 150000n,
-          changeAmount: 0n,
+          totalPrice: new Prisma.Decimal("150000.00"),
+          cashReceived: new Prisma.Decimal("150000.00"),
+          changeAmount: new Prisma.Decimal("0.00"),
         }),
       });
     });

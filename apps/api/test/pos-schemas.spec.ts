@@ -1,12 +1,15 @@
 import {
   createSaleSchema,
   createSalePriceSchema,
+  createProductCategorySchema,
+  createProductSchema,
   PAYMENT_METHODS,
   POS_ERROR_CODES,
   posBatchesListQuerySchema,
   posPricesListQuerySchema,
   posSalesListQuerySchema,
   updateSalePriceSchema,
+  updateProductSchema,
   voidSaleSchema,
 } from "@pfi/shared";
 
@@ -38,6 +41,62 @@ describe("POS shared sale contract", () => {
         transfer_confirmed: true,
       }).success,
     ).toBe(true);
+  });
+
+  it("accepts a product-based sale and two-decimal price while preserving batch-only payloads", () => {
+    expect(
+      createSaleSchema.safeParse({
+        productId: sale.batch_id,
+        batchId: sale.batch_id,
+        quantity: 2,
+        expectedUnitPrice: 1250.5,
+        paymentMethod: "cash",
+        cashReceived: 3000,
+      }).success,
+    ).toBe(true);
+    expect(
+      createSaleSchema.safeParse({
+        product_id: sale.batch_id,
+        quantity: 1,
+        expected_unit_price: 2500.001,
+        payment_method: "transfer",
+        transfer_confirmed: true,
+      }).success,
+    ).toBe(false);
+    expect(
+      createSaleSchema.safeParse({
+        quantity: 1,
+        expected_unit_price: 2500,
+        payment_method: "transfer",
+        transfer_confirmed: true,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("validates dynamic categories and product tracking fields", () => {
+    expect(
+      createProductCategorySchema.safeParse({
+        name: "Benih Ikan",
+        code: "BENIH-IKAN",
+        requiresBatch: true,
+      }).success,
+    ).toBe(true);
+    expect(
+      createProductSchema.safeParse({
+        categoryId: sale.batch_id,
+        sku: "PCK-001",
+        name: "Pakan Pelet",
+        trackingMode: "NON_BATCH",
+        species: null,
+        sizeLabel: null,
+        unit: "SAK",
+        unitPrice: 1250.5,
+        stockQuantity: 5,
+      }).success,
+    ).toBe(true);
+    expect(
+      updateProductSchema.safeParse({ unit_price: 10_000_000.01 }).success,
+    ).toBe(false);
   });
 
   it("rejects invalid quantities, price ranges, payment confirmation, and extra fields", () => {

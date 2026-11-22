@@ -8,23 +8,34 @@ datasource db {
   directUrl = env("MIGRATION_DATABASE_URL")
 }
 
+enum SaleReadiness {
+  BELUM_SIAP
+  SIAP_JUAL
+}
+
+enum ProductTrackingMode {
+  BATCH_TRACKED
+  NON_BATCH
+}
+
 model User {
-  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name              String             @db.VarChar(255)
-  email             String             @db.VarChar(255)
-  passwordHash      String             @map("password_hash") @db.VarChar(255)
-  role              String             @db.VarChar(50)
-  isActive          Boolean            @default(true) @map("is_active")
-  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  batches           Batch[]
-  incomingFish      IncomingFish[]
-  voids             IncomingFishVoid[]
-  idempotency       IdempotencyKey[]
-  auditLogs         AuditLog[]
-  salePricesCreated FishSalePrice[]    @relation("FishSalePriceCreatedBy")
-  salePricesUpdated FishSalePrice[]    @relation("FishSalePriceUpdatedBy")
-  fishSales         FishSale[]
-  fishSaleVoids     FishSaleVoid[]
+  id                          String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                        String                      @db.VarChar(255)
+  email                       String                      @db.VarChar(255)
+  passwordHash                String                      @map("password_hash") @db.VarChar(255)
+  role                        String                      @db.VarChar(50)
+  isActive                    Boolean                     @default(true) @map("is_active")
+  createdAt                   DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  batches                     Batch[]
+  batchSaleReadinessHistories BatchSaleReadinessHistory[]
+  incomingFish                IncomingFish[]
+  voids                       IncomingFishVoid[]
+  idempotency                 IdempotencyKey[]
+  auditLogs                   AuditLog[]
+  salePricesCreated           FishSalePrice[]             @relation("FishSalePriceCreatedBy")
+  salePricesUpdated           FishSalePrice[]             @relation("FishSalePriceUpdatedBy")
+  fishSales                   FishSale[]
+  fishSaleVoids               FishSaleVoid[]
 
   @@map("users")
 }
@@ -49,20 +60,39 @@ model BatchDailySequence {
 }
 
 model Batch {
-  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  batchCode    String        @unique(map: "batches_batch_code_key") @map("batch_code") @db.VarChar(50)
-  speciesId    String        @map("species_id") @db.Uuid
-  status       String        @db.VarChar(20)
-  createdBy    String        @map("created_by") @db.Uuid
-  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  species      FishSpecies   @relation(fields: [speciesId], references: [id], onDelete: Restrict, map: "batches_species_id_fkey")
-  creator      User          @relation(fields: [createdBy], references: [id], onDelete: Restrict, map: "batches_created_by_fkey")
-  incomingFish IncomingFish?
-  fishSales    FishSale[]
+  id                     String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batchCode              String                      @unique(map: "batches_batch_code_key") @map("batch_code") @db.VarChar(50)
+  speciesId              String                      @map("species_id") @db.Uuid
+  status                 String                      @db.VarChar(20)
+  saleReadiness          SaleReadiness               @default(BELUM_SIAP) @map("sale_readiness")
+  createdBy              String                      @map("created_by") @db.Uuid
+  createdAt              DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  species                FishSpecies                 @relation(fields: [speciesId], references: [id], onDelete: Restrict, map: "batches_species_id_fkey")
+  creator                User                        @relation(fields: [createdBy], references: [id], onDelete: Restrict, map: "batches_created_by_fkey")
+  incomingFish           IncomingFish?
+  saleReadinessHistories BatchSaleReadinessHistory[]
+  fishSales              FishSale[]
 
   @@index([status, createdAt(sort: Desc), id(sort: Desc)], map: "idx_batches_status_created_at_id")
+  @@index([status, saleReadiness], map: "idx_batches_status_sale_readiness")
   @@index([createdAt(sort: Desc), id(sort: Desc)], map: "idx_batches_created_at_id")
   @@map("batches")
+}
+
+model BatchSaleReadinessHistory {
+  id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batchId       String         @map("batch_id") @db.Uuid
+  fromReadiness SaleReadiness? @map("from_readiness")
+  toReadiness   SaleReadiness  @map("to_readiness")
+  changedBy     String         @map("changed_by") @db.Uuid
+  note          String?        @db.VarChar(500)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  batch         Batch          @relation(fields: [batchId], references: [id], onDelete: Restrict, map: "batch_sale_readiness_histories_batch_id_fkey")
+  actor         User           @relation(fields: [changedBy], references: [id], onDelete: Restrict, map: "batch_sale_readiness_histories_changed_by_fkey")
+
+  @@index([batchId, createdAt], map: "idx_batch_sale_readiness_histories_batch_id_created_at")
+  @@index([changedBy], map: "idx_batch_sale_readiness_histories_changed_by")
+  @@map("batch_sale_readiness_histories")
 }
 
 model IncomingFish {
@@ -142,6 +172,41 @@ model SaleDailySequence {
   @@map("sale_daily_sequences")
 }
 
+model ProductCategory {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name          String    @unique(map: "product_categories_name_key") @db.VarChar(100)
+  code          String    @unique(map: "product_categories_code_key") @db.VarChar(50)
+  requiresBatch Boolean   @map("requires_batch")
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  products      Product[]
+
+  @@map("product_categories")
+}
+
+model Product {
+  id            String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  categoryId    String              @map("category_id") @db.Uuid
+  sku           String              @unique(map: "products_sku_key") @db.VarChar(100)
+  name          String              @db.VarChar(255)
+  trackingMode  ProductTrackingMode @map("tracking_mode")
+  species       String?             @db.VarChar(100)
+  sizeLabel     String?             @map("size_label") @db.VarChar(20)
+  unit          String              @db.VarChar(20)
+  unitPrice     Decimal             @map("unit_price") @db.Decimal(12, 2)
+  stockQuantity Decimal?            @map("stock_quantity") @db.Decimal(12, 2)
+  isActive      Boolean             @default(true) @map("is_active")
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  category      ProductCategory     @relation(fields: [categoryId], references: [id], onDelete: Restrict, map: "products_category_id_fkey")
+  fishSales     FishSale[]
+
+  @@index([categoryId], map: "idx_products_category_id")
+  @@index([isActive, trackingMode], map: "idx_products_active_tracking_mode")
+  @@map("products")
+}
+
 model FishSalePrice {
   id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   speciesId    String      @map("species_id") @db.Uuid
@@ -167,23 +232,26 @@ model FishSalePrice {
 model FishSale {
   id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   saleCode      String        @unique(map: "fish_sales_sale_code_key") @map("sale_code") @db.VarChar(50)
-  batchId       String        @map("batch_id") @db.Uuid
+  batchId       String?       @map("batch_id") @db.Uuid
+  productId     String?       @map("product_id") @db.Uuid
   /// Positive integer count; bounded by computed stock in the SQL trigger.
   quantity      Int
-  /// Snapshot integer Rupiah; checks and multiplication are enforced in SQL.
-  unitPrice     BigInt        @map("unit_price")
-  totalAmount   BigInt        @map("total_amount")
+  /// Snapshot unit price; checks and multiplication are enforced in SQL.
+  unitPrice     Decimal       @map("unit_price") @db.Decimal(12, 2)
+  totalPrice    Decimal       @map("total_price") @db.Decimal(14, 2)
   /// Valid values and cash/transfer field rules are enforced by SQL CHECK constraints.
   paymentMethod String        @map("payment_method") @db.VarChar(20)
-  cashReceived  BigInt?       @map("cash_received")
-  changeAmount  BigInt?       @map("change_amount")
+  cashReceived  Decimal?      @map("cash_received") @db.Decimal(14, 2)
+  changeAmount  Decimal?      @map("change_amount") @db.Decimal(14, 2)
   createdBy     String        @map("created_by") @db.Uuid
   createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  batch         Batch         @relation(fields: [batchId], references: [id], onDelete: Restrict, map: "fish_sales_batch_id_fkey")
+  batch         Batch?        @relation(fields: [batchId], references: [id], onDelete: Restrict, map: "fish_sales_batch_id_fkey")
+  product       Product?      @relation(fields: [productId], references: [id], onDelete: Restrict, map: "fish_sales_product_id_fkey")
   creator       User          @relation(fields: [createdBy], references: [id], onDelete: Restrict, map: "fish_sales_created_by_fkey")
   void          FishSaleVoid?
 
   @@index([batchId], map: "idx_fish_sales_batch_id")
+  @@index([productId], map: "idx_fish_sales_product_id")
   @@index([createdBy], map: "idx_fish_sales_created_by")
   @@index([createdAt(sort: Desc), id(sort: Desc)], map: "idx_fish_sales_created_at_id")
   @@map("fish_sales")

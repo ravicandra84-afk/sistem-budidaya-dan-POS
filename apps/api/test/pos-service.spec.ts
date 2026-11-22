@@ -1,4 +1,5 @@
 import { PosService } from "../src/modules/pos/pos.service";
+import { PosCatalogService } from "../src/modules/pos/pos-catalog.service";
 import { PrismaService } from "../src/modules/prisma/prisma.service";
 import { ApiExceptionFilter } from "../src/common/http/api-exception.filter";
 import type { ArgumentsHost } from "@nestjs/common";
@@ -17,7 +18,7 @@ function createSaleRecord(voided = false) {
     batchId,
     quantity: 2,
     unitPrice: 1250n,
-    totalAmount: 2500n,
+    totalPrice: 2500,
     paymentMethod: "cash",
     cashReceived: 3000n,
     changeAmount: 500n,
@@ -50,6 +51,11 @@ function createService() {
     count: jest.fn(),
     findMany: jest.fn(),
   };
+  const product = {
+    count: jest.fn(),
+    findMany: jest.fn(),
+  };
+  const fishSpecies = { findMany: jest.fn() };
   const transaction = jest
     .fn()
     .mockImplementation((operations: Promise<unknown>[]) =>
@@ -59,6 +65,8 @@ function createService() {
   const prisma = {
     fishSale,
     fishSalePrice,
+    product,
+    fishSpecies,
     $queryRaw: queryRaw,
     $transaction: transaction,
   } as unknown as PrismaService;
@@ -67,6 +75,8 @@ function createService() {
     service: new PosService(prisma),
     fishSale,
     fishSalePrice,
+    product,
+    fishSpecies,
     queryRaw,
     transaction,
   };
@@ -155,25 +165,27 @@ describe("PosService sales queries", () => {
 });
 
 describe("PosService price catalog", () => {
-  it("paginates and maps price items with updater identity", async () => {
-    const { service, fishSalePrice } = createService();
+  it("paginates legacy price responses from active batch-tracked products", async () => {
+    const { service, product, fishSpecies } = createService();
     const createdAt = new Date("2026-11-20T03:00:00.000Z");
     const updatedAt = new Date("2026-11-20T04:00:00.000Z");
-    fishSalePrice.count.mockResolvedValue(11);
-    fishSalePrice.findMany.mockResolvedValue([
+    product.count.mockResolvedValue(11);
+    product.findMany.mockResolvedValue([
       {
         id: saleId,
-        fishSize: "3-5 cm",
-        pricePerFish: 2500n,
+        sku: "FISH-TEST-FISH-3-5-CM",
+        name: "Test Fish 3-5 cm",
+        species: "Test Fish",
+        sizeLabel: "3-5 cm",
+        unitPrice: { toNumber: () => 2500 },
         createdAt,
         updatedAt,
-        species: {
-          id: actorId,
-          speciesCode: "TEST-FISH",
-          speciesName: "Test Fish",
-        },
-        updater: { id: actorId, name: "POS Tester" },
+        trackingMode: "BATCH_TRACKED",
+        category: { isActive: true },
       },
+    ]);
+    fishSpecies.findMany.mockResolvedValue([
+      { id: actorId, speciesCode: "TEST-FISH", speciesName: "Test Fish" },
     ]);
 
     const response = await service.listPrices(
@@ -181,9 +193,14 @@ describe("PosService price catalog", () => {
       "request-prices",
     );
 
-    expect(fishSalePrice.findMany).toHaveBeenCalledWith(
+    expect(product.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: {},
+        where: {
+          trackingMode: "BATCH_TRACKED",
+          isActive: true,
+          category: { isActive: true },
+        },
+        include: { category: true },
         skip: 5,
         take: 5,
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -204,13 +221,17 @@ describe("PosService price catalog", () => {
       price_per_fish: 2500,
       created_at: createdAt.toISOString(),
       updated_at: updatedAt.toISOString(),
-      updated_by: { id: actorId, name: "POS Tester" },
+      updated_by: null,
     });
     expect(response.meta).toEqual({ request_id: "request-prices" });
   });
 
-  it("rejects out-of-range prices before opening a database transaction", async () => {
-    const { service, transaction } = createService();
+  it("rejects out-of-range legacy prices before opening a database transaction", async () => {
+    const prisma = {
+      $transaction: jest.fn(),
+      $queryRaw: jest.fn(),
+    } as unknown as PrismaService;
+    const service = new PosCatalogService(prisma);
     const actor: AuthenticatedUser = {
       id: actorId,
       name: "POS Tester",
@@ -223,7 +244,7 @@ describe("PosService price catalog", () => {
     } as never;
 
     await expect(
-      service.createPrice(
+      service.createLegacyPrice(
         actor,
         {
           species_id: actorId,
@@ -234,7 +255,7 @@ describe("PosService price catalog", () => {
         request,
       ),
     ).rejects.toMatchObject({ code: "PRICE_OUT_OF_RANGE" });
-    expect(transaction).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });
 
@@ -243,6 +264,7 @@ describe("PosService POS batches", () => {
     batch_id: batchId,
     batch_code: "PFI-BCH-20261120-001",
     status: "active",
+    sale_readiness: "SIAP_JUAL",
     species_id: actorId,
     species_code: "TEST-FISH",
     species_name: "Test Fish",
@@ -282,6 +304,7 @@ describe("PosService POS batches", () => {
           id: batchId,
           batch_code: "PFI-BCH-20261120-001",
           status: "active",
+          sale_readiness: "SIAP_JUAL",
           current_stock: 75,
         },
         species: {
@@ -297,6 +320,7 @@ describe("PosService POS batches", () => {
           id: saleId,
           batch_code: "PFI-BCH-20261120-001",
           status: "active",
+          sale_readiness: "SIAP_JUAL",
           current_stock: 10,
         },
         species: {

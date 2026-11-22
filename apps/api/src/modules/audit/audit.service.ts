@@ -16,7 +16,11 @@ export class AuditService {
     const where: Prisma.AuditLogWhereInput = {
       ...(Object.keys(createdAt).length > 0 ? { createdAt } : {}),
       ...(role === "Kepala Budidaya"
-        ? { action: { in: ["CREATE_ENTRY", "VOID_ENTRY"] } }
+        ? {
+            action: {
+              in: ["CREATE_ENTRY", "VOID_ENTRY", "UPDATE_BATCH_SALE_READINESS"],
+            },
+          }
         : {}),
     };
     const skip = (query.page - 1) * query.limit;

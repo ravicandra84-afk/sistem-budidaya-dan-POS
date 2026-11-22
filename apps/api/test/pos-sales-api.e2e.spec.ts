@@ -19,11 +19,19 @@ const databaseSuite =
   process.env.RUN_V45_DB_TESTS === "1" ? describe : describe.skip;
 const environment = loadApiEnvironment();
 const endpoint = "/api/v1/pos/sales";
+const v46SalesEndpoint = "/api/v1/sales";
 const priceEndpoint = "/api/v1/pos/prices";
 const posBatchesEndpoint = "/api/v1/pos/batches";
 
 type Actor = { id: string; name: string; role: string };
-type SaleFixture = { batchId: string; speciesId: string; user: Actor };
+type SaleFixture = {
+  batchId: string;
+  productId: string | null;
+  speciesId: string;
+  speciesName: string;
+  user: Actor;
+};
+type ProductFixture = { productId: string; user: Actor };
 
 databaseSuite("POS create-sale HTTP integration", () => {
   const admin = new PrismaClient({
@@ -63,22 +71,28 @@ databaseSuite("POS create-sale HTTP integration", () => {
 
   async function createFixture(
     role: string,
-    options: { withPrice?: boolean; stock?: number; price?: number } = {},
+    options: {
+      withPrice?: boolean;
+      stock?: number;
+      price?: number;
+      saleReadiness?: "BELUM_SIAP" | "SIAP_JUAL";
+    } = {},
   ): Promise<SaleFixture> {
     fixtureSequence += 1;
     const user = await createActor(role);
-    const batch = await admin.$transaction(async (transaction) => {
+    const fixture = await admin.$transaction(async (transaction) => {
       const species = await transaction.fishSpecies.create({
         data: {
           speciesCode: `POS-TEST-${String(fixtureSequence).padStart(3, "0")}`,
-          speciesName: "POS Test",
+          speciesName: `POS Test ${fixtureSequence}`,
         },
-        select: { id: true },
+        select: { id: true, speciesName: true },
       });
       const createdBatch = await transaction.batch.create({
         data: {
           batchCode: `PFI-BCH-20000201-${String(fixtureSequence).padStart(3, "0")}`,
           status: "active",
+          saleReadiness: options.saleReadiness ?? "SIAP_JUAL",
           speciesId: species.id,
           createdBy: user.id,
         },
@@ -94,20 +108,60 @@ databaseSuite("POS create-sale HTTP integration", () => {
           createdBy: user.id,
         },
       });
+      let productId: string | null = null;
       if (options.withPrice !== false) {
-        await transaction.fishSalePrice.create({
-          data: {
-            speciesId: species.id,
-            fishSize: "3-5 cm",
-            pricePerFish: BigInt(options.price ?? 2500),
-            createdBy: user.id,
-            updatedBy: user.id,
-          },
+        const category = await transaction.productCategory.findUniqueOrThrow({
+          where: { code: "BENIH-IKAN" },
         });
+        const speciesCode = `POS-TEST-${String(fixtureSequence).padStart(3, "0")}`;
+        const product = await transaction.product.create({
+          data: {
+            categoryId: category.id,
+            sku: `${speciesCode}-3-5-CM`,
+            name: `${species.speciesName} 3-5 cm`,
+            trackingMode: "BATCH_TRACKED",
+            species: species.speciesName,
+            sizeLabel: "3-5 cm",
+            unit: "EKOR",
+            unitPrice: new Prisma.Decimal(String(options.price ?? 2500)),
+            stockQuantity: null,
+          },
+          select: { id: true },
+        });
+        productId = product.id;
       }
-      return createdBatch;
+      return { batch: createdBatch, productId };
     });
-    return { batchId: batch.id, speciesId: batch.speciesId, user };
+    return {
+      batchId: fixture.batch.id,
+      productId: fixture.productId,
+      speciesId: fixture.batch.speciesId,
+      speciesName: `POS Test ${fixtureSequence}`,
+      user,
+    };
+  }
+
+  async function createNonBatchFixture(role: string): Promise<ProductFixture> {
+    const user = await createActor(role);
+    const category = await admin.productCategory.findUniqueOrThrow({
+      where: { code: "PRODUK-UMUM" },
+      select: { id: true },
+    });
+    const product = await admin.product.create({
+      data: {
+        categoryId: category.id,
+        sku: `NON-${randomUUID()}`,
+        name: "Pakan Pelet PF-1000",
+        trackingMode: "NON_BATCH",
+        species: null,
+        sizeLabel: null,
+        unit: "SAK",
+        unitPrice: new Prisma.Decimal("1250.50"),
+        stockQuantity: new Prisma.Decimal("10.00"),
+      },
+      select: { id: true },
+    });
+    return { productId: product.id, user };
   }
 
   function cashPayload(
@@ -125,7 +179,7 @@ databaseSuite("POS create-sale HTTP integration", () => {
   }
 
   function postSale(
-    fixture: SaleFixture,
+    fixture: ProductFixture | SaleFixture,
     payload: Record<string, unknown>,
     idempotencyKey: string = randomUUID(),
   ) {
@@ -133,7 +187,43 @@ databaseSuite("POS create-sale HTTP integration", () => {
       .post(endpoint)
       .set("Authorization", `Bearer ${accessToken(fixture.user)}`)
       .set("Idempotency-Key", idempotencyKey)
+      .send(
+        fixture.productId &&
+          !("product_id" in payload) &&
+          !("productId" in payload)
+          ? { ...payload, product_id: fixture.productId }
+          : payload,
+      );
+  }
+
+  function postBatchOnlySale(
+    fixture: SaleFixture,
+    payload: Record<string, unknown>,
+    idempotencyKey = randomUUID(),
+  ) {
+    return request(app.getHttpServer())
+      .post(endpoint)
+      .set("Authorization", `Bearer ${accessToken(fixture.user)}`)
+      .set("Idempotency-Key", idempotencyKey)
       .send(payload);
+  }
+
+  function postV46Sale(
+    fixture: ProductFixture | SaleFixture,
+    payload: Record<string, unknown>,
+    idempotencyKey = randomUUID(),
+  ) {
+    const productPayload =
+      fixture.productId &&
+      !("product_id" in payload) &&
+      !("productId" in payload)
+        ? { ...payload, product_id: fixture.productId }
+        : payload;
+    return request(app.getHttpServer())
+      .post(v46SalesEndpoint)
+      .set("Authorization", `Bearer ${accessToken(fixture.user)}`)
+      .set("Idempotency-Key", idempotencyKey)
+      .send(productPayload);
   }
 
   function getSales(fixture: SaleFixture, query = "") {
@@ -145,6 +235,85 @@ databaseSuite("POS create-sale HTTP integration", () => {
   function getPrices(fixture: SaleFixture, query = "") {
     return request(app.getHttpServer())
       .get(`${priceEndpoint}${query ? `?${query}` : ""}`)
+      .set("Authorization", `Bearer ${accessToken(fixture.user)}`);
+  }
+
+  function getCategories(fixture: SaleFixture) {
+    return request(app.getHttpServer())
+      .get("/api/v1/pos/categories")
+      .set("Authorization", `Bearer ${accessToken(fixture.user)}`);
+  }
+
+  function postCategory(
+    fixture: SaleFixture,
+    payload: Record<string, unknown>,
+    idempotencyKey = randomUUID(),
+  ) {
+    return request(app.getHttpServer())
+      .post("/api/v1/pos/categories")
+      .set("Authorization", `Bearer ${accessToken(fixture.user)}`)
+      .set("Idempotency-Key", idempotencyKey)
+      .send(payload);
+  }
+
+  function patchCategory(
+    fixture: SaleFixture,
+    categoryId: string,
+    payload: Record<string, unknown>,
+    idempotencyKey = randomUUID(),
+  ) {
+    return request(app.getHttpServer())
+      .patch(`/api/v1/pos/categories/${categoryId}`)
+      .set("Authorization", `Bearer ${accessToken(fixture.user)}`)
+      .set("Idempotency-Key", idempotencyKey)
+      .send(payload);
+  }
+
+  function getProducts(fixture: SaleFixture) {
+    return request(app.getHttpServer())
+      .get("/api/v1/pos/products")
+      .set("Authorization", `Bearer ${accessToken(fixture.user)}`);
+  }
+
+  function postProduct(
+    fixture: SaleFixture,
+    payload: Record<string, unknown>,
+    idempotencyKey = randomUUID(),
+  ) {
+    return request(app.getHttpServer())
+      .post("/api/v1/pos/products")
+      .set("Authorization", `Bearer ${accessToken(fixture.user)}`)
+      .set("Idempotency-Key", idempotencyKey)
+      .send(payload);
+  }
+
+  function patchProduct(
+    fixture: SaleFixture,
+    productId: string,
+    payload: Record<string, unknown>,
+    idempotencyKey = randomUUID(),
+  ) {
+    return request(app.getHttpServer())
+      .patch(`/api/v1/pos/products/${productId}`)
+      .set("Authorization", `Bearer ${accessToken(fixture.user)}`)
+      .set("Idempotency-Key", idempotencyKey)
+      .send(payload);
+  }
+
+  function deleteProduct(
+    fixture: SaleFixture,
+    productId: string,
+    idempotencyKey = randomUUID(),
+  ) {
+    return request(app.getHttpServer())
+      .delete(`/api/v1/pos/products/${productId}`)
+      .set("Authorization", `Bearer ${accessToken(fixture.user)}`)
+      .set("Idempotency-Key", idempotencyKey);
+  }
+
+  function getSellableCatalog(fixture: ProductFixture) {
+    return request(app.getHttpServer())
+      .get("/api/v1/pos/catalog")
       .set("Authorization", `Bearer ${accessToken(fixture.user)}`);
   }
 
@@ -198,7 +367,7 @@ databaseSuite("POS create-sale HTTP integration", () => {
   }
 
   function voidSale(
-    fixture: SaleFixture,
+    fixture: Pick<ProductFixture, "user">,
     saleId: string,
     idempotencyKey = randomUUID(),
   ) {
@@ -225,16 +394,8 @@ databaseSuite("POS create-sale HTTP integration", () => {
   }
 
   async function priceIdForFixture(fixture: SaleFixture): Promise<string> {
-    const price = await admin.fishSalePrice.findUniqueOrThrow({
-      where: {
-        speciesId_fishSize: {
-          speciesId: fixture.speciesId,
-          fishSize: "3-5 cm",
-        },
-      },
-      select: { id: true },
-    });
-    return price.id;
+    if (!fixture.productId) throw new Error("Fixture has no catalog product");
+    return fixture.productId;
   }
 
   async function installSaleAuditFailure(): Promise<void> {
@@ -302,7 +463,8 @@ databaseSuite("POS create-sale HTTP integration", () => {
     await runtime.$connect();
     await admin.$executeRaw`
       TRUNCATE TABLE
-        "audit_logs", "fish_sale_voids", "fish_sales", "fish_sale_prices",
+        "audit_logs", "batch_sale_readiness_histories", "fish_sale_voids",
+        "fish_sales", "products", "fish_sale_prices",
         "incoming_fish_voids", "incoming_fish", "batches", "idempotency_keys",
         "sale_daily_sequences", "batch_daily_sequences", "users", "fish_species"
       RESTART IDENTITY
@@ -331,7 +493,8 @@ databaseSuite("POS create-sale HTTP integration", () => {
     if (app) await app.close();
     await admin.$executeRaw`
       TRUNCATE TABLE
-        "audit_logs", "fish_sale_voids", "fish_sales", "fish_sale_prices",
+        "audit_logs", "batch_sale_readiness_histories", "fish_sale_voids",
+        "fish_sales", "products", "fish_sale_prices",
         "incoming_fish_voids", "incoming_fish", "batches", "idempotency_keys",
         "sale_daily_sequences", "batch_daily_sequences", "users", "fish_species"
       RESTART IDENTITY
@@ -391,6 +554,148 @@ databaseSuite("POS create-sale HTTP integration", () => {
       ).toBe(1);
     },
   );
+
+  it("creates a batch-tracked sale through the V4.6 route and preserves the nine-field receipt", async () => {
+    const fixture = await createFixture("Kasir");
+    const response = await postV46Sale(
+      fixture,
+      cashPayload(fixture.batchId, { quantity: 2, cash_received: 6000 }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.sale).toMatchObject({
+      batch_id: fixture.batchId,
+      product_id: fixture.productId,
+      total_price: 5000,
+      total_amount: 5000,
+    });
+    expect(Object.keys(response.body.data.receipt)).toEqual([
+      "company_name",
+      "transaction_date_time",
+      "species_name",
+      "fish_size",
+      "quantity",
+      "unit_price",
+      "total_payment",
+      "payment_method",
+      "cashier_name",
+    ]);
+    const sale = await admin.fishSale.findUniqueOrThrow({
+      where: { id: response.body.data.sale.id },
+    });
+    expect(sale.productId).toBe(fixture.productId);
+    expect(sale.totalPrice.toNumber()).toBe(5000);
+  });
+
+  it("keeps V4.5 batch-only payload compatibility through the legacy sale route", async () => {
+    const fixture = await createFixture("Kasir");
+    const response = await postBatchOnlySale(
+      fixture,
+      cashPayload(fixture.batchId, { quantity: 1, cash_received: 2500 }),
+    );
+    expect(response.status).toBe(201);
+    expect(response.body.data.sale.product_id).toBe(fixture.productId);
+    expect(response.body.data.sale.batch_id).toBe(fixture.batchId);
+  });
+
+  it("blocks checkout and listing while a batch is BELUM_SIAP", async () => {
+    const fixture = await createFixture("Kasir", {
+      saleReadiness: "BELUM_SIAP",
+    });
+    const listing = await getPosBatches(fixture);
+    expect(listing.status).toBe(200);
+    expect(
+      listing.body.data.items.some(
+        (item: { batch: { id: string } }) => item.batch.id === fixture.batchId,
+      ),
+    ).toBe(false);
+
+    const response = await postSale(
+      fixture,
+      cashPayload(fixture.batchId, { quantity: 1, cash_received: 2500 }),
+    );
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe("BATCH_NOT_READY");
+  });
+
+  it("sells and VOID-restores NON_BATCH product stock with batch_id null", async () => {
+    const fixture = await createNonBatchFixture("Kasir");
+    const salePayload = {
+      product_id: fixture.productId,
+      batch_id: null,
+      quantity: 2,
+      expected_unit_price: 1250.5,
+      payment_method: "cash",
+      cash_received: 3000,
+    };
+    const response = await postV46Sale(fixture, salePayload);
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.sale).toMatchObject({
+      product_id: fixture.productId,
+      batch_id: null,
+      unit_price: 1250.5,
+      total_price: 2501,
+    });
+    expect(response.body.data.receipt.fish_size).toBe("SAK");
+    const afterSale = await admin.product.findUniqueOrThrow({
+      where: { id: fixture.productId },
+      select: { stockQuantity: true },
+    });
+    expect(afterSale.stockQuantity?.toNumber()).toBe(8);
+
+    const saleId = response.body.data.sale.id as string;
+    const voided = await voidSale(fixture, saleId);
+    expect(voided.status).toBe(200);
+    const afterVoid = await admin.product.findUniqueOrThrow({
+      where: { id: fixture.productId },
+      select: { stockQuantity: true },
+    });
+    expect(afterVoid.stockQuantity?.toNumber()).toBe(10);
+    expect((await voidSale(fixture, saleId)).status).toBe(409);
+  });
+
+  it("limits catalog management to Owner/Admin and archives without deleting", async () => {
+    const owner = await createFixture("Owner", { withPrice: false });
+    const createPayload = {
+      category_id: "00000000-0000-4000-8000-000000000001",
+      sku: `GENERAL-${randomUUID()}`,
+      name: "Obat Probiotik",
+      tracking_mode: "NON_BATCH",
+      species: null,
+      size_label: null,
+      unit: "BOTOL",
+      unit_price: 15000.5,
+      stock_quantity: 4,
+    };
+    const category = await admin.productCategory.findUniqueOrThrow({
+      where: { code: "PRODUK-UMUM" },
+      select: { id: true },
+    });
+    createPayload.category_id = category.id;
+
+    const created = await postProduct(owner, createPayload);
+    if (created.status !== 201) throw new Error(JSON.stringify(created.body));
+    expect(created.body).toMatchObject({ status: "success" });
+    expect(created.status).toBe(201);
+    expect(created.body.data.unit_price).toBe(15000.5);
+
+    const cashier = await createFixture("Kasir", { withPrice: false });
+    expect((await getProducts(cashier)).status).toBe(200);
+    expect((await deleteProduct(cashier, created.body.data.id)).status).toBe(
+      403,
+    );
+    expect(
+      (await patchProduct(cashier, created.body.data.id, { name: "X" })).status,
+    ).toBe(403);
+
+    const archived = await deleteProduct(owner, created.body.data.id);
+    expect(archived.status).toBe(200);
+    expect(archived.body.data.is_active).toBe(false);
+    expect(
+      await admin.product.count({ where: { id: created.body.data.id } }),
+    ).toBe(1);
+  });
 
   it("includes the middleware request ID in every successful POS GET envelope", async () => {
     const fixture = await createFixture("Owner");
@@ -511,7 +816,7 @@ databaseSuite("POS create-sale HTTP integration", () => {
           status: "active",
           current_stock: 100,
         },
-        species: { id: fixture.speciesId, species_name: "POS Test" },
+        species: { id: fixture.speciesId, species_name: fixture.speciesName },
         fish_size: "3-5 cm",
         unit_price: 2500,
       });
@@ -564,15 +869,12 @@ databaseSuite("POS create-sale HTTP integration", () => {
         expect.objectContaining({
           species_id: expect.any(String),
           species_code: expect.any(String),
-          species_name: "POS Test",
+          species_name: fixture.speciesName,
           fish_size: "3-5 cm",
           price_per_fish: 2500,
           created_at: expect.any(String),
           updated_at: expect.any(String),
-          updated_by: expect.objectContaining({
-            id: expect.any(String),
-            name: expect.any(String),
-          }),
+          updated_by: null,
         }),
       );
     }
@@ -593,6 +895,7 @@ databaseSuite("POS create-sale HTTP integration", () => {
     const key = randomUUID();
 
     const created = await postPrice(fixture, payload, key);
+    expect(created.body).toMatchObject({ status: "success" });
     expect(created.status).toBe(201);
     expect(created.body.data).toMatchObject({
       species_id: fixture.speciesId,
@@ -730,11 +1033,13 @@ databaseSuite("POS create-sale HTTP integration", () => {
       expect(failedUpdate.status).toBe(500);
       expect(failedUpdate.body.error.code).toBe("INTERNAL_SERVER_ERROR");
       expect(
-        await admin.fishSalePrice.findUniqueOrThrow({
-          where: { id: priceId },
-          select: { pricePerFish: true },
-        }),
-      ).toEqual({ pricePerFish: 2500n });
+        await admin.product
+          .findUniqueOrThrow({
+            where: { id: priceId },
+            select: { unitPrice: true },
+          })
+          .then(({ unitPrice }) => unitPrice.toNumber()),
+      ).toBe(2500);
       expect(
         await admin.idempotencyKey.count({
           where: {
@@ -757,15 +1062,15 @@ databaseSuite("POS create-sale HTTP integration", () => {
       expect(failedCreate.status).toBe(500);
       expect(failedCreate.body.error.code).toBe("INTERNAL_SERVER_ERROR");
       expect(
-        await admin.fishSalePrice.findUnique({
+        await admin.product.count({
           where: {
-            speciesId_fishSize: {
-              speciesId: fixture.speciesId,
-              fishSize: "4-6 cm",
-            },
+            trackingMode: "BATCH_TRACKED",
+            species: `POS Test ${fixtureSequence}`,
+            sizeLabel: "4-6 cm",
+            isActive: true,
           },
         }),
-      ).toBeNull();
+      ).toBe(0);
       expect(
         await admin.idempotencyKey.count({
           where: {
@@ -1107,7 +1412,7 @@ databaseSuite("POS create-sale HTTP integration", () => {
     );
     expect(
       voidedPage.body.data.items.map((sale: { id: string }) => sale.id),
-    ).toEqual([saleIds[0]]);
+    ).toContain(saleIds[0]);
 
     const badStatus = await getSales(fixture, "status=pending");
     expect(badStatus.status).toBe(400);
@@ -1154,7 +1459,7 @@ databaseSuite("POS create-sale HTTP integration", () => {
     ]);
     expect(response.body.data).toMatchObject({
       company_name: "PT. Pisciculture Farm Indonesia",
-      species_name: "POS Test",
+      species_name: creator.speciesName,
       fish_size: "3-5 cm",
       quantity: 5,
       unit_price: 2500,

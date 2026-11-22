@@ -2,16 +2,16 @@
 
 # Sistem Manajemen Operasional Pisciculture Farm Indonesia (PFI)
 
-| Informasi                          | Nilai                                                                                            |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Nama produk                        | Sistem Manajemen Operasional Pisciculture Farm Indonesia (PFI)                                   |
-| Dokumen                            | Product Requirements Document (`prd.md`)                                                         |
-| Versi PRD                          | 1.0                                                                                              |
-| Status                             | Draft terstruktur berdasarkan Master Blueprint & API Contract PFI V4.5 + perluasan MVP Kasir/POS |
-| Bahasa                             | Indonesia                                                                                        |
-| Zona waktu bisnis                  | `Asia/Jakarta` (UTC+7)                                                                           |
-| Basis teknis yang telah ditetapkan | PostgreSQL 13+, autentikasi JWT, RBAC, ACID, idempotency UUIDv4                                  |
-| Sumber utama                       | `master_blueprint_api_contract_pfi_main.md` dan `architecture.md`                                |
+| Informasi                          | Nilai                                                             |
+| ---------------------------------- | ----------------------------------------------------------------- |
+| Nama produk                        | Sistem Manajemen Operasional Pisciculture Farm Indonesia (PFI)    |
+| Dokumen                            | Product Requirements Document (`prd.md`)                          |
+| Versi PRD                          | 1.1                                                               |
+| Status                             | Baseline V4.5 dengan addendum V4.6 pasca-MVP yang disetujui Owner |
+| Bahasa                             | Indonesia                                                         |
+| Zona waktu bisnis                  | `Asia/Jakarta` (UTC+7)                                            |
+| Basis teknis yang telah ditetapkan | PostgreSQL 13+, autentikasi JWT, RBAC, ACID, idempotency UUIDv4   |
+| Sumber utama                       | `master_blueprint_api_contract_pfi_main.md` dan `architecture.md` |
 
 > **Kedudukan dokumen:** PRD ini menerjemahkan blueprint menjadi kebutuhan produk, halaman, perilaku pengguna, alur kerja, dan kondisi kegagalan. PRD tidak boleh digunakan untuk diam-diam mengubah keputusan bisnis atau kontrak teknis yang sudah dikunci pada Master Blueprint. Jika ditemukan konflik antara PRD dan blueprint, pekerjaan implementasi harus dihentikan pada bagian yang konflik dan meminta keputusan pemilik produk.
 
@@ -37,6 +37,8 @@ Agar AI, desainer, developer, dan QA tidak menganggap semua rancangan memiliki t
 3. Rancangan teknis POS pada blueprint tetap berstatus usulan sampai detail yang tertunda dikunci.
 4. PRD ini tidak menambah fitur bisnis yang tidak didukung oleh blueprint.
 5. Semua nilai, enum, role, dan aturan yang disebut sebagai LOCKED harus dipertahankan secara konsisten pada desain UI, backend, database, dan QA.
+
+Addendum V4.6 yang disetujui Owner di Bagian 2.4 dan 13.4 menambah scope pasca-MVP. Addendum tersebut tidak mengubah aturan penerimaan, siklus hidup batch, atau kontrak POS V4.5 sebelum implementasi V4.6 dirilis.
 
 ---
 
@@ -158,6 +160,36 @@ Fitur berikut tidak boleh dibuat sebagai bagian dari ruang lingkup ini tanpa kep
 **Catatan stok:** rumus stok V4.5 menyertakan pengurangan kematian valid. Modul kematian sendiri berada di fase selanjutnya. PRD ini tidak mendefinisikan halaman atau alur input kematian; integrasi transaksi kematian harus mengikuti spesifikasi modul fase berikutnya.
 
 ---
+
+## 2.4 Addendum V4.6 — Katalog Multi-Produk dan Kesiapan Jual
+
+Status: `APPROVED — OWNER`, pasca-MVP. Persyaratan ini menambah kemampuan POS tanpa mengubah kontrak penerimaan V4.5 atau siklus hidup batch.
+
+### Gerbang kesiapan jual
+
+- `batches.status` dan transisi V4.5 tetap `active`, `completed`, dan `voided`; trigger yang mengatur siklus hidup tersebut tidak berubah.
+- Tambahkan `sale_readiness` terpisah dengan nilai `BELUM_SIAP` (default untuk batch baru dan batch lama) atau `SIAP_JUAL`.
+- Batch hanya tersedia untuk penjualan bila `status = 'active'` dan `sale_readiness = 'SIAP_JUAL'`. Stok jual batch tetap dihitung dari transaksi valid, bukan disimpan sebagai angka manual.
+- Hanya `Kepala Budidaya` dan `Owner` yang boleh mengubah kesiapan ke atau dari `SIAP_JUAL`. Setiap perubahan harus atomik dengan penambahan baris `batch_sale_readiness_histories`; nilai asal boleh NULL untuk inisialisasi yang dicatat secara eksplisit.
+- Riwayat mencatat UUID, batch, kesiapan asal nullable, kesiapan tujuan, aktor, catatan lapangan nullable, dan waktu `TIMESTAMPTZ`. Riwayat bersifat append-only.
+
+### Katalog multi-produk POS
+
+- Tambahkan kategori produk dinamis, termasuk kategori awal yang dapat mencakup Benih Ikan, Ikan Konsumsi, Pakan & Nutrisi, Obat & Probiotik, serta Sarana Budidaya.
+- Katalog dikelola Owner dan role `Admin Operasional` yang menjadi pemetaan role yang sudah ada untuk istilah Admin; V4.6 tidak menambah role baru.
+- Produk memiliki SKU unik, nama, kategori, mode `BATCH_TRACKED` atau `NON_BATCH`, unit, harga aktif, dan status arsip `is_active`.
+- Harga katalog memakai `NUMERIC(12,2)`, harus lebih dari nol dan tidak melebihi Rp10.000.000,00.
+- Produk `BATCH_TRACKED` dipetakan ke spesies dan ukuran. Stok tampilannya merupakan agregasi stok dari batch aktif yang siap dijual; kasir tetap memilih satu `batch_id` tertentu ketika checkout.
+- Produk `NON_BATCH` menggunakan stok produk langsung dan transaksi penjualannya tidak memiliki `batch_id`. Satuan produk mengikuti katalog.
+- Perubahan kategori/produk dan perubahan kesiapan jual wajib mengikuti autentikasi JWT, RBAC backend, transaksi ACID, serta kebijakan audit append-only. Nama action audit khusus katalog dan kesiapan jual harus dikunci dalam P8-02 sebelum endpoint diterapkan.
+
+### Kompatibilitas transaksi dan struk
+
+- `fish_sales` tetap append-only serta mempertahankan `sale_daily_sequences` dan sembilan field resmi struk V4.5.
+- Tambahkan relasi `product_id`; baris historis yang sudah ada tetap valid dengan `product_id = NULL`. Penjualan baru wajib mereferensikan produk aktif.
+- `batch_id` menjadi nullable untuk mengakomodasi penjualan `NON_BATCH`. Baris penjualan `BATCH_TRACKED` wajib memiliki batch; baris `NON_BATCH` wajib memiliki `batch_id = NULL`.
+- Pembuatan penjualan katalog menggunakan `POST /api/v1/sales`, idempotency UUIDv4, dan transaksi database. Untuk produk `BATCH_TRACKED`, backend wajib mengunci batch dengan `SELECT ... FOR UPDATE`, lalu memvalidasi ulang status aktif, `sale_readiness = 'SIAP_JUAL'`, stok, harga, dan pembayaran sebelum commit.
+- Field struk tetap sembilan. Pemetaan identitas produk `NON_BATCH` ke slot spesies/ukuran pada struk serta dampak harga desimal ke snapshot pembayaran harus dikunci sebagai bagian kontrak P8-02; jangan menambah field struk atau membulatkan nilai diam-diam.
 
 # 3. Pengguna sasaran dan peran
 
@@ -1132,6 +1164,19 @@ Fitur POS dinyatakan diterima apabila:
 
 # 14. Keputusan yang masih terbuka
 
+## 13.4 Acceptance criteria V4.6
+
+- [ ] Lifecycle batch V4.5 dan trigger `active | completed | voided` tidak berubah.
+- [ ] Batch lama dan batch baru mendapat kesiapan awal `BELUM_SIAP`; hanya role yang ditetapkan dapat mengubahnya.
+- [ ] Setiap perubahan kesiapan membuat histori immutable yang terhubung ke batch dan aktor.
+- [ ] POS hanya mengizinkan batch aktif dan siap jual; stok agregat tidak menggantikan pemilihan batch spesifik.
+- [ ] Katalog kategori/produk mendukung mode batch dan non-batch, harga dalam batas V4.6, serta arsip tanpa penghapusan historis.
+- [ ] Penjualan batch dan non-batch menjaga invariants relasi `product_id`/`batch_id`, locking, pembayaran, idempotency, audit, nomor harian, dan append-only.
+- [ ] Baris `fish_sales` historis tetap dapat dibaca tanpa mengubah histori atau struk sembilan field.
+- [ ] Perilaku field struk untuk produk non-batch dan pembulatan/penyimpanan pembayaran desimal sudah dikunci serta diuji sebelum rilis V4.6.
+
+# 14. Keputusan yang masih terbuka
+
 Bagian ini adalah daftar pertanyaan/keputusan yang memang belum dijawab dalam blueprint. AI dan tim pengembang tidak boleh menetapkan jawabannya secara sepihak.
 
 | ID     | Topik                         | Status                                  | Keputusan / Yang masih perlu diputuskan                                                                                                                                                                                                                                                               |
@@ -1283,5 +1328,6 @@ Satu fitur baru boleh mulai dikerjakan jika:
 | Versi | Perubahan                                                                                                                                                                                   |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1.0   | Penyusunan PRD berdasarkan Master Blueprint V4.5 dan perluasan MVP Ikan Keluar (Kasir/POS) yang diberikan pengguna. Memisahkan kebutuhan terkunci, rancangan teknis POS, dan keputusan TBD. |
+| 1.1   | Addendum V4.6 pasca-MVP disetujui Owner: katalog multi-produk dan kesiapan jual batch, dengan lifecycle V4.5 dipertahankan.                                                                 |
 
 **Akhir dokumen.**

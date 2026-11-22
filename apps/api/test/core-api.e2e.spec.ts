@@ -39,6 +39,7 @@ describe("V4.5 core API HTTP integration", () => {
       create: jest.fn(),
       update: jest.fn(),
     },
+    batchSaleReadinessHistory: { create: jest.fn() },
     incomingFish: { create: jest.fn(), findUnique: jest.fn() },
     incomingFishVoid: { create: jest.fn() },
     idempotencyKey: { findUnique: jest.fn() },
@@ -50,6 +51,7 @@ describe("V4.5 core API HTTP integration", () => {
     user: prismaMock.user,
     fishSpecies: prismaMock.fishSpecies,
     batch: prismaMock.batch,
+    batchSaleReadinessHistory: prismaMock.batchSaleReadinessHistory,
     incomingFish: prismaMock.incomingFish,
     incomingFishVoid: prismaMock.incomingFishVoid,
     auditLog: prismaMock.auditLog,
@@ -117,6 +119,15 @@ describe("V4.5 core API HTTP integration", () => {
             .set("Idempotency-Key", randomUUID())
             .send({ reason: "Uji akses RBAC" }),
       },
+      {
+        name: "PATCH /batches/{id}/sale-readiness",
+        send: () =>
+          request(app.getHttpServer())
+            .patch(`/api/v1/batches/${batchId}/sale-readiness`)
+            .set("Authorization", authorization())
+            .set("Idempotency-Key", randomUUID())
+            .send({ saleReadiness: "SIAP_JUAL", note: "Kondisi siap" }),
+      },
     ];
   };
 
@@ -154,6 +165,7 @@ describe("V4.5 core API HTTP integration", () => {
               id: batchId,
               batch_code: "PFI-BCH-20261115-005",
               status: "active",
+              sale_readiness: "BELUM_SIAP",
             },
           ];
         }
@@ -192,6 +204,9 @@ describe("V4.5 core API HTTP integration", () => {
       id: batchId,
       status: "voided",
     });
+    transactionMock.batchSaleReadinessHistory.create.mockResolvedValue({
+      id: "history-id",
+    });
     prismaMock.user.findUnique.mockImplementation(async ({ where }) => ({
       id: where.id,
       name: "Pengguna Test",
@@ -222,9 +237,11 @@ describe("V4.5 core API HTTP integration", () => {
         id: batchId,
         batchCode: "PFI-BCH-20261115-005",
         status: "active",
+        saleReadiness: "BELUM_SIAP",
         createdAt: new Date("2026-11-15T10:00:00.000Z"),
         species: { id: speciesId, speciesCode: "LELE", speciesName: "Lele" },
         incomingFish: null,
+        saleReadinessHistories: [],
       });
       prismaMock.auditLog.count.mockResolvedValue(0);
       prismaMock.auditLog.findMany.mockResolvedValue([]);
@@ -250,7 +267,15 @@ describe("V4.5 core API HTTP integration", () => {
         );
         expect(prismaMock.auditLog.findMany).toHaveBeenCalledWith(
           expect.objectContaining({
-            where: { action: { in: ["CREATE_ENTRY", "VOID_ENTRY"] } },
+            where: {
+              action: {
+                in: [
+                  "CREATE_ENTRY",
+                  "VOID_ENTRY",
+                  "UPDATE_BATCH_SALE_READINESS",
+                ],
+              },
+            },
           }),
         );
       } else {
@@ -278,6 +303,38 @@ describe("V4.5 core API HTTP integration", () => {
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe("FORBIDDEN");
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["Owner", 200],
+    ["Kepala Budidaya", 200],
+    ["Admin Operasional", 403],
+    ["Kasir", 403],
+  ])("sale readiness route enforces role %s", async (role, expectedStatus) => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: actorId,
+      name: `${role} Test`,
+      email: "user@pfi.test",
+      role,
+      isActive: true,
+    });
+    const txCountBefore = prismaMock.$transaction.mock.calls.length;
+    const response = await request(app.getHttpServer())
+      .patch(`/api/v1/batches/${batchId}/sale-readiness`)
+      .set("Authorization", `Bearer ${accessToken(role)}`)
+      .set("Idempotency-Key", randomUUID())
+      .send({ saleReadiness: "SIAP_JUAL" });
+
+    expect(response.status).toBe(expectedStatus);
+    if (expectedStatus === 403) {
+      expect(response.body.error.code).toBe("FORBIDDEN");
+      expect(prismaMock.$transaction).toHaveBeenCalledTimes(txCountBefore);
+    } else {
+      expect(response.body.data).toMatchObject({
+        batch_id: batchId,
+        sale_readiness: "SIAP_JUAL",
+      });
+    }
   });
 
   it.each(protectedEndpointRequests("matrix-token"))(
@@ -392,6 +449,7 @@ describe("V4.5 core API HTTP integration", () => {
       id: batchId,
       batchCode: "PFI-BCH-20261115-005",
       status: "active",
+      saleReadiness: "BELUM_SIAP",
       createdAt: new Date("2026-11-15T10:00:00.000Z"),
       species: { id: speciesId, speciesCode: "LELE", speciesName: "Lele" },
       incomingFish: {
@@ -405,6 +463,7 @@ describe("V4.5 core API HTTP integration", () => {
         createdAt: new Date("2026-11-15T10:00:00.000Z"),
         void: null,
       },
+      saleReadinessHistories: [],
     });
     const response = await request(app.getHttpServer())
       .get(`/api/v1/batches/${batchId}`)
@@ -445,7 +504,11 @@ describe("V4.5 core API HTTP integration", () => {
     expect(response.status).toBe(200);
     expect(prismaMock.auditLog.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { action: { in: ["CREATE_ENTRY", "VOID_ENTRY"] } },
+        where: {
+          action: {
+            in: ["CREATE_ENTRY", "VOID_ENTRY", "UPDATE_BATCH_SALE_READINESS"],
+          },
+        },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       }),
     );

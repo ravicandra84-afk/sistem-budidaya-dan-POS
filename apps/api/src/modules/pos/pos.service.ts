@@ -17,7 +17,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { hashBusinessPayload, isUuidV4 } from "../receiving/idempotency";
 
 const createSaleEndpoint = "/api/v1/pos/sales";
-const pricesEndpoint = "/api/v1/pos/prices";
+const v46SaleEndpoint = "/api/v1/sales";
 const companyName = "PT. Pisciculture Farm Indonesia";
 
 type CachedResponse = {
@@ -30,13 +30,27 @@ type LockedBatch = {
   id: string;
   batch_code: string;
   status: string;
+  sale_readiness: "BELUM_SIAP" | "SIAP_JUAL";
   species_id: string;
   species_name: string;
   fish_size: string;
 };
 
+type LockedProduct = {
+  id: string;
+  sku: string;
+  name: string;
+  tracking_mode: "BATCH_TRACKED" | "NON_BATCH";
+  species: string | null;
+  size_label: string | null;
+  unit: string;
+  unit_price: Prisma.Decimal;
+  stock_quantity: Prisma.Decimal | null;
+  is_active: boolean;
+  category_is_active: boolean;
+};
+
 type SaleSequence = { last_number: bigint };
-type PriceRow = { price_per_fish: bigint };
 
 class ExistingIdempotencyKeyError extends Error {}
 
@@ -47,33 +61,30 @@ const saleInclude = {
       incomingFish: { select: { fishSize: true } },
     },
   },
+  product: { include: { category: true } },
   creator: { select: { id: true, name: true } },
   void: { include: { actor: { select: { id: true, name: true } } } },
 } satisfies Prisma.FishSaleInclude;
+const productInclude = { category: true } satisfies Prisma.ProductInclude;
 
 type SaleWithRelations = Prisma.FishSaleGetPayload<{
   include: typeof saleInclude;
 }>;
-
-const priceInclude = {
-  species: { select: { id: true, speciesCode: true, speciesName: true } },
-  updater: { select: { id: true, name: true } },
-} satisfies Prisma.FishSalePriceInclude;
-
-type PriceWithRelations = Prisma.FishSalePriceGetPayload<{
-  include: typeof priceInclude;
+type ProductWithCategory = Prisma.ProductGetPayload<{
+  include: typeof productInclude;
 }>;
 
 type PosBatchRow = {
   batch_id: string;
   batch_code: string;
   status: string;
+  sale_readiness: "BELUM_SIAP" | "SIAP_JUAL";
   species_id: string;
   species_code: string;
   species_name: string;
   fish_size: string;
   current_stock: bigint;
-  unit_price: bigint | null;
+  unit_price: Prisma.Decimal | null;
 };
 
 function currentJakartaDate(): string {
@@ -114,11 +125,27 @@ export class PosService {
     this.transactionTimeout = lockTimeoutMs + 5_000;
   }
 
+  createV46Sale(
+    actor: AuthenticatedUser,
+    input: CreateSaleInput,
+    idempotencyKey: string | undefined,
+    request: RequestWithId,
+  ) {
+    return this.createSale(
+      actor,
+      input,
+      idempotencyKey,
+      request,
+      v46SaleEndpoint,
+    );
+  }
+
   async createSale(
     actor: AuthenticatedUser,
     input: CreateSaleInput,
     idempotencyKey: string | undefined,
     request: RequestWithId,
+    endpoint = createSaleEndpoint,
   ) {
     if (!isUuidV4(idempotencyKey)) {
       throw new ApiException(
@@ -139,99 +166,207 @@ export class PosService {
             INSERT INTO "idempotency_keys"
               ("user_id", "endpoint", "idempotency_key", "payload_hash", "status")
             VALUES
-              (${actor.id}::uuid, ${createSaleEndpoint}, ${idempotencyKey}::uuid, ${payloadHash}, 'processing')
+              (${actor.id}::uuid, ${endpoint}, ${idempotencyKey}::uuid, ${payloadHash}, 'processing')
             ON CONFLICT ("user_id", "endpoint", "idempotency_key") DO NOTHING
             RETURNING "id"
           `;
 
           if (!idempotencyRow) throw new ExistingIdempotencyKeyError();
 
-          const [batch] = await transaction.$queryRaw<LockedBatch[]>`
-            SELECT
-              "batch"."id",
-              "batch"."batch_code",
-              "batch"."status",
-              "batch"."species_id",
-              "species"."species_name",
-              "receipt"."fish_size"
-            FROM "batches" AS "batch"
-            INNER JOIN "fish_species" AS "species"
-              ON "species"."id" = "batch"."species_id"
-            INNER JOIN "incoming_fish" AS "receipt"
-              ON "receipt"."batch_id" = "batch"."id"
-            WHERE "batch"."id" = ${input.batch_id}::uuid
-            FOR UPDATE OF "batch"
-          `;
+          let batch: LockedBatch | undefined;
+          let productId = input.product_id ?? null;
+          if (!productId && input.batch_id) {
+            [batch] = await transaction.$queryRaw<LockedBatch[]>`
+              SELECT "batch"."id", "batch"."batch_code", "batch"."status",
+                     "batch"."sale_readiness", "batch"."species_id",
+                     "species"."species_name", "receipt"."fish_size"
+              FROM "batches" AS "batch"
+              INNER JOIN "fish_species" AS "species"
+                ON "species"."id" = "batch"."species_id"
+              INNER JOIN "incoming_fish" AS "receipt"
+                ON "receipt"."batch_id" = "batch"."id"
+              WHERE "batch"."id" = ${input.batch_id}::uuid
+            `;
+            if (!batch) {
+              throw new ApiException(
+                HttpStatus.NOT_FOUND,
+                "BATCH_NOT_FOUND",
+                "Batch tidak ditemukan.",
+              );
+            }
+            const [legacyProduct] = await transaction.$queryRaw<
+              Array<{ id: string }>
+            >`
+              SELECT "product"."id"
+              FROM "products" AS "product"
+              INNER JOIN "product_categories" AS "category"
+                ON "category"."id" = "product"."category_id"
+              WHERE "product"."tracking_mode" = 'BATCH_TRACKED'
+                AND "product"."is_active" = true
+                AND "category"."is_active" = true
+                AND "product"."species" = ${batch.species_name}
+                AND "product"."size_label" = ${batch.fish_size}
+              ORDER BY "product"."created_at" DESC, "product"."id" DESC
+              LIMIT 1
+            `;
+            productId = legacyProduct?.id ?? null;
+          }
+          if (!productId) {
+            if (input.batch_id) {
+              throw new ApiException(
+                HttpStatus.CONFLICT,
+                "PRICE_NOT_CONFIGURED",
+                "Produk katalog untuk spesies dan ukuran batch ini belum tersedia.",
+              );
+            }
+            throw new ApiException(
+              HttpStatus.BAD_REQUEST,
+              "INVALID_PAYLOAD",
+              "product_id wajib kecuali batch_id dipakai oleh klien V4.5.",
+            );
+          }
 
-          if (!batch) {
+          const [product] = await transaction.$queryRaw<LockedProduct[]>`
+            SELECT "product"."id", "product"."sku", "product"."name", "product"."tracking_mode",
+                   "product"."species", "product"."size_label", "product"."unit",
+                   "product"."unit_price", "product"."stock_quantity",
+                   "product"."is_active", "category"."is_active" AS category_is_active
+            FROM "products" AS "product"
+            INNER JOIN "product_categories" AS "category"
+              ON "category"."id" = "product"."category_id"
+            WHERE "product"."id" = ${productId}::uuid
+            FOR UPDATE OF "product"
+          `;
+          if (!product) {
             throw new ApiException(
               HttpStatus.NOT_FOUND,
-              "BATCH_NOT_FOUND",
-              "Batch tidak ditemukan.",
+              "PRODUCT_NOT_FOUND",
+              "Produk katalog tidak ditemukan.",
             );
           }
-          if (batch.status !== "active") {
+          if (!product.is_active || !product.category_is_active) {
             throw new ApiException(
-              HttpStatus.CONFLICT,
-              "BATCH_NOT_ACTIVE",
-              "Batch tidak berstatus active.",
+              HttpStatus.UNPROCESSABLE_ENTITY,
+              "PRODUCT_NOT_ACTIVE",
+              "Produk atau kategori sudah tidak aktif.",
             );
           }
 
-          const [stockRow] = await transaction.$queryRaw<
-            Array<{ current_stock: bigint }>
-          >`
-            SELECT "calculate_batch_stock"(${batch.id}::uuid) AS current_stock
-          `;
-          const availableQuantity = Number(stockRow?.current_stock ?? 0n);
-          if (input.quantity > availableQuantity) {
+          if (product.tracking_mode === "BATCH_TRACKED") {
+            if (!input.batch_id) {
+              throw new ApiException(
+                HttpStatus.BAD_REQUEST,
+                "INVALID_PAYLOAD",
+                "batch_id wajib untuk produk BATCH_TRACKED.",
+              );
+            }
+            [batch] = await transaction.$queryRaw<LockedBatch[]>`
+              SELECT "batch"."id", "batch"."batch_code", "batch"."status",
+                     "batch"."sale_readiness", "batch"."species_id",
+                     "species"."species_name", "receipt"."fish_size"
+              FROM "batches" AS "batch"
+              INNER JOIN "fish_species" AS "species"
+                ON "species"."id" = "batch"."species_id"
+              INNER JOIN "incoming_fish" AS "receipt"
+                ON "receipt"."batch_id" = "batch"."id"
+              WHERE "batch"."id" = ${input.batch_id}::uuid
+              FOR UPDATE OF "batch"
+            `;
+            if (!batch) {
+              throw new ApiException(
+                HttpStatus.NOT_FOUND,
+                "BATCH_NOT_FOUND",
+                "Batch tidak ditemukan.",
+              );
+            }
+            if (batch.status !== "active") {
+              throw new ApiException(
+                HttpStatus.CONFLICT,
+                "BATCH_NOT_ACTIVE",
+                "Batch tidak berstatus active.",
+              );
+            }
+            if (batch.sale_readiness !== "SIAP_JUAL") {
+              throw new ApiException(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "BATCH_NOT_READY",
+                "Batch belum berstatus SIAP_JUAL.",
+              );
+            }
+            if (
+              product.species !== batch.species_name ||
+              product.size_label !== batch.fish_size
+            ) {
+              throw new ApiException(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "INVALID_PAYLOAD",
+                "Batch tidak sesuai dengan spesies dan ukuran produk.",
+              );
+            }
+          } else if (input.batch_id != null) {
             throw new ApiException(
-              HttpStatus.CONFLICT,
-              "INSUFFICIENT_STOCK",
-              "Stok batch berubah dan tidak mencukupi jumlah yang diminta.",
-              { available_quantity: availableQuantity },
+              HttpStatus.BAD_REQUEST,
+              "INVALID_PAYLOAD",
+              "batch_id harus null untuk produk NON_BATCH.",
             );
           }
 
-          const [price] = await transaction.$queryRaw<PriceRow[]>`
-            SELECT "price_per_fish"
-            FROM "fish_sale_prices"
-            WHERE "species_id" = ${batch.species_id}::uuid
-              AND "fish_size" = ${batch.fish_size}
-            FOR UPDATE
-          `;
-          if (!price) {
-            throw new ApiException(
-              HttpStatus.CONFLICT,
-              "PRICE_NOT_CONFIGURED",
-              "Harga jual untuk spesies dan ukuran ini belum tersedia.",
-            );
-          }
-
-          const unitPrice = Number(price.price_per_fish);
-          if (input.expected_unit_price !== unitPrice) {
+          const unitPrice = new Prisma.Decimal(product.unit_price);
+          if (!unitPrice.equals(input.expected_unit_price.toString())) {
             throw new ApiException(
               HttpStatus.CONFLICT,
               "PRICE_CHANGED",
               "Harga jual berubah. Perbarui dan konfirmasikan harga terbaru.",
-              { unit_price: unitPrice },
+              { unit_price: unitPrice.toNumber() },
             );
           }
 
-          const totalAmount = BigInt(input.quantity) * price.price_per_fish;
+          const totalPrice = unitPrice.mul(input.quantity).toDecimalPlaces(2);
+          if (totalPrice.greaterThan("999999999999.99")) {
+            throw new ApiException(
+              HttpStatus.UNPROCESSABLE_ENTITY,
+              "INVALID_PAYLOAD",
+              "Total pembayaran melebihi kapasitas kolom total_price.",
+            );
+          }
           const cashReceived =
             input.payment_method === "cash"
-              ? BigInt(input.cash_received)
+              ? new Prisma.Decimal(input.cash_received.toString())
               : null;
-          if (input.payment_method === "cash" && cashReceived! < totalAmount) {
+          if (
+            input.payment_method === "cash" &&
+            cashReceived!.lessThan(totalPrice)
+          ) {
             throw new ApiException(
               HttpStatus.BAD_REQUEST,
               "INVALID_PAYLOAD",
               "Uang diterima tidak boleh kurang dari total pembayaran.",
             );
           }
+          const availableQuantity =
+            product.tracking_mode === "BATCH_TRACKED"
+              ? Number(
+                  (
+                    await transaction.$queryRaw<
+                      Array<{ current_stock: bigint }>
+                    >`
+                      SELECT "calculate_batch_stock"(${batch!.id}::uuid) AS current_stock
+                    `
+                  )[0]?.current_stock ?? 0n,
+                )
+              : (product.stock_quantity?.toNumber() ?? 0);
+          if (input.quantity > availableQuantity) {
+            throw new ApiException(
+              HttpStatus.CONFLICT,
+              "INSUFFICIENT_STOCK",
+              "Stok berubah dan tidak mencukupi jumlah yang diminta.",
+              { available_quantity: availableQuantity },
+            );
+          }
           const changeAmount =
-            cashReceived === null ? null : cashReceived - totalAmount;
+            cashReceived === null
+              ? null
+              : cashReceived.minus(totalPrice).toDecimalPlaces(2);
 
           const saleDate = currentJakartaDate();
           await transaction.$executeRaw`
@@ -257,10 +392,11 @@ export class PosService {
           const sale = await transaction.fishSale.create({
             data: {
               saleCode,
-              batchId: batch.id,
+              batchId: batch?.id ?? null,
+              productId: product.id,
               quantity: input.quantity,
-              unitPrice: price.price_per_fish,
-              totalAmount,
+              unitPrice,
+              totalPrice,
               paymentMethod: input.payment_method,
               cashReceived,
               changeAmount,
@@ -287,19 +423,23 @@ export class PosService {
               sale: {
                 id: sale.id,
                 sale_code: sale.saleCode,
-                batch_id: batch.id,
-                batch_code: batch.batch_code,
-                species_id: batch.species_id,
-                species_name: batch.species_name,
-                fish_size: batch.fish_size,
+                batch_id: batch?.id ?? null,
+                batch_code: batch?.batch_code ?? null,
+                product_id: product.id,
+                product_sku: product.sku,
+                product_name: product.name,
+                species_id: batch?.species_id ?? null,
+                species_name: batch?.species_name ?? product.name,
+                fish_size: batch?.fish_size ?? product.unit,
                 quantity: sale.quantity,
-                unit_price: unitPrice,
-                total_amount: Number(totalAmount),
+                unit_price: unitPrice.toNumber(),
+                total_price: totalPrice.toNumber(),
+                total_amount: totalPrice.toNumber(),
                 payment_method: sale.paymentMethod,
                 cash_received:
-                  cashReceived === null ? null : Number(cashReceived),
+                  cashReceived === null ? null : cashReceived.toNumber(),
                 change_amount:
-                  changeAmount === null ? null : Number(changeAmount),
+                  changeAmount === null ? null : changeAmount.toNumber(),
                 created_by: actor.id,
                 cashier_name: actor.name,
                 created_at: createdAt.toISOString(),
@@ -308,11 +448,11 @@ export class PosService {
               receipt: {
                 company_name: companyName,
                 transaction_date_time: formatReceiptDateTime(createdAt),
-                species_name: batch.species_name,
-                fish_size: batch.fish_size,
+                species_name: batch?.species_name ?? product.sku,
+                fish_size: batch?.fish_size ?? product.unit,
                 quantity: sale.quantity,
-                unit_price: unitPrice,
-                total_payment: Number(totalAmount),
+                unit_price: unitPrice.toNumber(),
+                total_payment: totalPrice.toNumber(),
                 payment_method: sale.paymentMethod,
                 cashier_name: actor.name,
               },
@@ -343,6 +483,7 @@ export class PosService {
           idempotencyKey,
           payloadHash,
           request.requestId,
+          endpoint,
         );
       }
       throw error;
@@ -449,11 +590,16 @@ export class PosService {
       data: {
         company_name: companyName,
         transaction_date_time: formatReceiptDateTime(sale.createdAt),
-        species_name: sale.batch.species.speciesName,
-        fish_size: sale.batch.incomingFish?.fishSize ?? null,
+        species_name:
+          sale.batch?.species.speciesName ?? sale.product?.name ?? null,
+        fish_size:
+          sale.batch?.incomingFish?.fishSize ??
+          sale.product?.sizeLabel ??
+          sale.product?.unit ??
+          null,
         quantity: sale.quantity,
         unit_price: Number(sale.unitPrice),
-        total_payment: Number(sale.totalAmount),
+        total_payment: Number(sale.totalPrice),
         payment_method: sale.paymentMethod,
         cashier_name: sale.creator.name,
       },
@@ -463,23 +609,56 @@ export class PosService {
 
   async listPrices(query: PosPricesListQuery, requestId: string) {
     const skip = (query.page - 1) * query.limit;
-    const where: Prisma.FishSalePriceWhereInput = {};
-    const [totalItems, prices] = await this.prisma.$transaction([
-      this.prisma.fishSalePrice.count({ where }),
-      this.prisma.fishSalePrice.findMany({
+    const where: Prisma.ProductWhereInput = {
+      trackingMode: "BATCH_TRACKED",
+      isActive: true,
+      category: { isActive: true },
+    };
+    const [totalItems, products] = await this.prisma.$transaction([
+      this.prisma.product.count({ where }),
+      this.prisma.product.findMany({
         where,
         skip,
         take: query.limit,
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-        include: priceInclude,
+        include: productInclude,
       }),
     ]);
+    const speciesNames = [
+      ...new Set(
+        products
+          .map((product) => product.species)
+          .filter((value): value is string => value !== null),
+      ),
+    ];
+    const species = await this.prisma.fishSpecies.findMany({
+      where: { speciesName: { in: speciesNames } },
+      select: { id: true, speciesCode: true, speciesName: true },
+    });
+    const speciesByName = new Map(
+      species.map((item) => [item.speciesName, item]),
+    );
 
     return {
       status: "success" as const,
       message: "Daftar harga berhasil dimuat.",
       data: {
-        items: prices.map((price) => this.mapPrice(price)),
+        items: products.map((product) => {
+          const fishSpecies = product.species
+            ? speciesByName.get(product.species)
+            : undefined;
+          return {
+            id: product.id,
+            species_id: fishSpecies?.id ?? null,
+            species_code: fishSpecies?.speciesCode ?? null,
+            species_name: product.species,
+            fish_size: product.sizeLabel,
+            price_per_fish: product.unitPrice.toNumber(),
+            created_at: product.createdAt.toISOString(),
+            updated_at: product.updatedAt.toISOString(),
+            updated_by: null,
+          };
+        }),
         pagination: {
           page: query.page,
           limit: query.limit,
@@ -500,6 +679,7 @@ export class PosService {
         INNER JOIN "incoming_fish" AS "receipt"
           ON "receipt"."batch_id" = "batch"."id"
         WHERE "batch"."status" = 'active'
+          AND "batch"."sale_readiness" = 'SIAP_JUAL'
           AND "calculate_batch_stock"("batch"."id") > 0
       `,
       this.prisma.$queryRaw<PosBatchRow[]>`
@@ -507,21 +687,32 @@ export class PosService {
           "batch"."id" AS batch_id,
           "batch"."batch_code" AS batch_code,
           "batch"."status" AS status,
+          "batch"."sale_readiness" AS sale_readiness,
           "species"."id" AS species_id,
           "species"."species_code" AS species_code,
           "species"."species_name" AS species_name,
           "receipt"."fish_size" AS fish_size,
           "calculate_batch_stock"("batch"."id") AS current_stock,
-          "price"."price_per_fish" AS unit_price
+          "product"."unit_price" AS unit_price
         FROM "batches" AS "batch"
         INNER JOIN "fish_species" AS "species"
           ON "species"."id" = "batch"."species_id"
         INNER JOIN "incoming_fish" AS "receipt"
           ON "receipt"."batch_id" = "batch"."id"
-        LEFT JOIN "fish_sale_prices" AS "price"
-          ON "price"."species_id" = "batch"."species_id"
-          AND "price"."fish_size" = "receipt"."fish_size"
+        LEFT JOIN LATERAL (
+          SELECT "candidate"."unit_price"
+          FROM "products" AS "candidate"
+          INNER JOIN "product_categories" AS "category"
+            ON "category"."id" = "candidate"."category_id"
+          WHERE "candidate"."tracking_mode" = 'BATCH_TRACKED'
+            AND "candidate"."is_active" = true
+            AND "category"."is_active" = true
+            AND "candidate"."species" = "species"."species_name"
+            AND "candidate"."size_label" = "receipt"."fish_size"
+          LIMIT 1
+        ) AS "product" ON true
         WHERE "batch"."status" = 'active'
+          AND "batch"."sale_readiness" = 'SIAP_JUAL'
           AND "calculate_batch_stock"("batch"."id") > 0
         ORDER BY "batch"."created_at" DESC, "batch"."id" DESC
         OFFSET ${skip} LIMIT ${query.limit}
@@ -551,20 +742,30 @@ export class PosService {
         "batch"."id" AS batch_id,
         "batch"."batch_code" AS batch_code,
         "batch"."status" AS status,
+        "batch"."sale_readiness" AS sale_readiness,
         "species"."id" AS species_id,
         "species"."species_code" AS species_code,
         "species"."species_name" AS species_name,
         "receipt"."fish_size" AS fish_size,
         "calculate_batch_stock"("batch"."id") AS current_stock,
-        "price"."price_per_fish" AS unit_price
+        "product"."unit_price" AS unit_price
       FROM "batches" AS "batch"
       INNER JOIN "fish_species" AS "species"
         ON "species"."id" = "batch"."species_id"
       INNER JOIN "incoming_fish" AS "receipt"
         ON "receipt"."batch_id" = "batch"."id"
-      LEFT JOIN "fish_sale_prices" AS "price"
-        ON "price"."species_id" = "batch"."species_id"
-        AND "price"."fish_size" = "receipt"."fish_size"
+      LEFT JOIN LATERAL (
+        SELECT "candidate"."unit_price"
+        FROM "products" AS "candidate"
+        INNER JOIN "product_categories" AS "category"
+          ON "category"."id" = "candidate"."category_id"
+        WHERE "candidate"."tracking_mode" = 'BATCH_TRACKED'
+          AND "candidate"."is_active" = true
+          AND "category"."is_active" = true
+          AND "candidate"."species" = "species"."species_name"
+          AND "candidate"."size_label" = "receipt"."fish_size"
+        LIMIT 1
+      ) AS "product" ON true
       WHERE "batch"."id" = ${batchId}::uuid
     `;
 
@@ -580,6 +781,13 @@ export class PosService {
         HttpStatus.CONFLICT,
         "BATCH_NOT_ACTIVE",
         "Batch tidak berstatus active.",
+      );
+    }
+    if (batch.sale_readiness !== "SIAP_JUAL") {
+      throw new ApiException(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        "BATCH_NOT_READY",
+        "Batch belum berstatus SIAP_JUAL.",
       );
     }
 
@@ -599,242 +807,6 @@ export class PosService {
       data: this.mapPosBatch(batch),
       meta: { request_id: requestId },
     };
-  }
-
-  async createPrice(
-    actor: AuthenticatedUser,
-    input: CreateSalePriceInput,
-    idempotencyKey: string | undefined,
-    request: RequestWithId,
-  ) {
-    if (!isUuidV4(idempotencyKey)) {
-      throw new ApiException(
-        HttpStatus.BAD_REQUEST,
-        "INVALID_IDEMPOTENCY_KEY",
-        "Header Idempotency-Key harus berupa UUIDv4.",
-      );
-    }
-    this.assertPriceInRange(input.price_per_fish);
-
-    const payloadHash = hashBusinessPayload(input);
-    try {
-      const body = await this.prisma.$transaction(
-        async (transaction) => {
-          await transaction.$queryRaw`SELECT set_config('lock_timeout', ${this.lockTimeout}, true)`;
-          const [idempotencyRow] = await transaction.$queryRaw<
-            Array<{ id: string }>
-          >`
-            INSERT INTO "idempotency_keys"
-              ("user_id", "endpoint", "idempotency_key", "payload_hash", "status")
-            VALUES
-              (${actor.id}::uuid, ${pricesEndpoint}, ${idempotencyKey}::uuid, ${payloadHash}, 'processing')
-            ON CONFLICT ("user_id", "endpoint", "idempotency_key") DO NOTHING
-            RETURNING "id"
-          `;
-          if (!idempotencyRow) throw new ExistingIdempotencyKeyError();
-
-          const species = await transaction.fishSpecies.findUnique({
-            where: { id: input.species_id },
-            select: { id: true },
-          });
-          if (!species) {
-            throw new ApiException(
-              HttpStatus.BAD_REQUEST,
-              "INVALID_PAYLOAD",
-              "Spesies tidak ditemukan.",
-            );
-          }
-
-          const [insertedPrice] = await transaction.$queryRaw<
-            Array<{ id: string }>
-          >`
-            INSERT INTO "fish_sale_prices"
-              ("species_id", "fish_size", "price_per_fish", "created_by", "updated_by")
-            VALUES
-              (${input.species_id}::uuid, ${input.fish_size}, ${BigInt(input.price_per_fish)}, ${actor.id}::uuid, ${actor.id}::uuid)
-            RETURNING "id"
-          `;
-          if (!insertedPrice) {
-            throw new ApiException(
-              HttpStatus.INTERNAL_SERVER_ERROR,
-              "INTERNAL_SERVER_ERROR",
-              "Harga jual tidak dapat disimpan.",
-            );
-          }
-          const price = await transaction.fishSalePrice.findUnique({
-            where: { id: insertedPrice.id },
-            include: priceInclude,
-          });
-          if (!price) {
-            throw new ApiException(
-              HttpStatus.INTERNAL_SERVER_ERROR,
-              "INTERNAL_SERVER_ERROR",
-              "Harga jual tidak dapat dimuat.",
-            );
-          }
-          await transaction.auditLog.create({
-            data: {
-              requestId: request.requestId,
-              actorId: actor.id,
-              action: "CREATE_SALE_PRICE",
-              entityType: "fish_sale_prices",
-              entityId: price.id,
-              ipAddress: request.socket.remoteAddress?.slice(0, 45) ?? null,
-            },
-          });
-
-          const response: CachedResponse = {
-            status: "success",
-            message: "Harga jual berhasil ditambahkan.",
-            data: this.mapPrice(price),
-          };
-          await transaction.$executeRaw`
-            UPDATE "idempotency_keys"
-            SET "status" = 'completed', "response_status" = 201,
-                "response_body" = ${JSON.stringify(response)}::jsonb,
-                "completed_at" = CURRENT_TIMESTAMP
-            WHERE "id" = ${idempotencyRow.id}::uuid
-          `;
-          return response;
-        },
-        { timeout: this.transactionTimeout },
-      );
-
-      return {
-        ...body,
-        meta: { idempotency_status: "executed", request_id: request.requestId },
-      };
-    } catch (error) {
-      if (error instanceof ExistingIdempotencyKeyError) {
-        return this.loadCachedResponse(
-          actor.id,
-          idempotencyKey,
-          payloadHash,
-          request.requestId,
-          pricesEndpoint,
-        );
-      }
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        (error.code === "P2002" ||
-          (error.code === "P2010" && error.meta?.code === "23505"))
-      ) {
-        throw new ApiException(
-          HttpStatus.CONFLICT,
-          "PRICE_ALREADY_EXISTS",
-          "Harga untuk kombinasi spesies dan ukuran ini sudah tersedia.",
-        );
-      }
-      throw error;
-    }
-  }
-
-  async updatePrice(
-    priceId: string,
-    actor: AuthenticatedUser,
-    input: UpdateSalePriceInput,
-    idempotencyKey: string | undefined,
-    request: RequestWithId,
-  ) {
-    if (!isUuidV4(idempotencyKey)) {
-      throw new ApiException(
-        HttpStatus.BAD_REQUEST,
-        "INVALID_IDEMPOTENCY_KEY",
-        "Header Idempotency-Key harus berupa UUIDv4.",
-      );
-    }
-    this.assertPriceInRange(input.price_per_fish);
-
-    const endpoint = `${pricesEndpoint}/${priceId}`;
-    const payloadHash = hashBusinessPayload({
-      price_id: priceId,
-      ...input,
-    });
-    try {
-      const body = await this.prisma.$transaction(
-        async (transaction) => {
-          await transaction.$queryRaw`SELECT set_config('lock_timeout', ${this.lockTimeout}, true)`;
-          const [idempotencyRow] = await transaction.$queryRaw<
-            Array<{ id: string }>
-          >`
-            INSERT INTO "idempotency_keys"
-              ("user_id", "endpoint", "idempotency_key", "payload_hash", "status")
-            VALUES
-              (${actor.id}::uuid, ${endpoint}, ${idempotencyKey}::uuid, ${payloadHash}, 'processing')
-            ON CONFLICT ("user_id", "endpoint", "idempotency_key") DO NOTHING
-            RETURNING "id"
-          `;
-          if (!idempotencyRow) throw new ExistingIdempotencyKeyError();
-
-          const [lockedPrice] = await transaction.$queryRaw<
-            Array<{ id: string }>
-          >`
-            SELECT "id"
-            FROM "fish_sale_prices"
-            WHERE "id" = ${priceId}::uuid
-            FOR UPDATE
-          `;
-          if (!lockedPrice) {
-            throw new ApiException(
-              HttpStatus.NOT_FOUND,
-              "PRICE_NOT_FOUND",
-              "Harga jual tidak ditemukan.",
-            );
-          }
-
-          const price = await transaction.fishSalePrice.update({
-            where: { id: priceId },
-            data: {
-              pricePerFish: BigInt(input.price_per_fish),
-              updatedBy: actor.id,
-              updatedAt: new Date(),
-            },
-            include: priceInclude,
-          });
-          await transaction.auditLog.create({
-            data: {
-              requestId: request.requestId,
-              actorId: actor.id,
-              action: "UPDATE_SALE_PRICE",
-              entityType: "fish_sale_prices",
-              entityId: price.id,
-              ipAddress: request.socket.remoteAddress?.slice(0, 45) ?? null,
-            },
-          });
-
-          const response: CachedResponse = {
-            status: "success",
-            message: "Harga jual berhasil diperbarui.",
-            data: this.mapPrice(price),
-          };
-          await transaction.$executeRaw`
-            UPDATE "idempotency_keys"
-            SET "status" = 'completed', "response_status" = 200,
-                "response_body" = ${JSON.stringify(response)}::jsonb,
-                "completed_at" = CURRENT_TIMESTAMP
-            WHERE "id" = ${idempotencyRow.id}::uuid
-          `;
-          return response;
-        },
-        { timeout: this.transactionTimeout },
-      );
-
-      return {
-        ...body,
-        meta: { idempotency_status: "executed", request_id: request.requestId },
-      };
-    } catch (error) {
-      if (error instanceof ExistingIdempotencyKeyError) {
-        return this.loadCachedResponse(
-          actor.id,
-          idempotencyKey,
-          payloadHash,
-          request.requestId,
-          endpoint,
-        );
-      }
-      throw error;
-    }
   }
 
   async voidSale(
@@ -871,9 +843,13 @@ export class PosService {
           if (!idempotencyRow) throw new ExistingIdempotencyKeyError();
 
           const [saleReference] = await transaction.$queryRaw<
-            Array<{ id: string; batch_id: string }>
+            Array<{
+              id: string;
+              batch_id: string | null;
+              product_id: string | null;
+            }>
           >`
-            SELECT "id", "batch_id"
+            SELECT "id", "batch_id", "product_id"
             FROM "fish_sales"
             WHERE "id" = ${saleId}::uuid
           `;
@@ -885,31 +861,58 @@ export class PosService {
             );
           }
 
-          const [batch] = await transaction.$queryRaw<
-            Array<{ id: string; status: string }>
-          >`
-            SELECT "id", "status"
-            FROM "batches"
-            WHERE "id" = ${saleReference.batch_id}::uuid
-            FOR UPDATE
-          `;
-          if (!batch) {
-            throw new ApiException(
-              HttpStatus.NOT_FOUND,
-              "BATCH_NOT_FOUND",
-              "Batch transaksi tidak ditemukan.",
-            );
+          if (saleReference.product_id) {
+            const [lockedProduct] = await transaction.$queryRaw<
+              Array<{ id: string }>
+            >`
+              SELECT "id" FROM "products"
+              WHERE "id" = ${saleReference.product_id}::uuid
+              FOR UPDATE
+            `;
+            if (!lockedProduct) {
+              throw new ApiException(
+                HttpStatus.NOT_FOUND,
+                "PRODUCT_NOT_FOUND",
+                "Produk transaksi tidak ditemukan.",
+              );
+            }
           }
-          if (batch.status === "voided") {
+
+          let batch: { id: string; status: string } | null = null;
+          if (saleReference.batch_id) {
+            const [lockedBatch] = await transaction.$queryRaw<
+              Array<{ id: string; status: string }>
+            >`
+              SELECT "id", "status"
+              FROM "batches"
+              WHERE "id" = ${saleReference.batch_id}::uuid
+              FOR UPDATE
+            `;
+            if (!lockedBatch) {
+              throw new ApiException(
+                HttpStatus.NOT_FOUND,
+                "BATCH_NOT_FOUND",
+                "Batch transaksi tidak ditemukan.",
+              );
+            }
+            if (lockedBatch.status === "voided") {
+              throw new ApiException(
+                HttpStatus.CONFLICT,
+                "BATCH_NOT_ACTIVE",
+                "Penjualan dari batch yang telah di-VOID tidak dapat dibatalkan.",
+              );
+            }
+            batch = lockedBatch;
+          } else if (!saleReference.product_id) {
             throw new ApiException(
               HttpStatus.CONFLICT,
-              "BATCH_NOT_ACTIVE",
-              "Penjualan dari batch yang telah di-VOID tidak dapat dibatalkan.",
+              "SALE_NOT_FOUND",
+              "Penjualan tidak memiliki produk atau batch yang valid.",
             );
           }
 
           const [sale] = await transaction.$queryRaw<
-            Array<{ sale_id: string; batch_id: string }>
+            Array<{ sale_id: string; batch_id: string | null }>
           >`
             SELECT "sale_id", "batch_id"
             FROM "lock_fish_sale_for_update"(${saleId}::uuid)
@@ -937,11 +940,19 @@ export class PosService {
           const saleVoid = await transaction.fishSaleVoid.create({
             data: { saleId, voidedBy: actor.id },
           });
-          const [updatedBatch] = await transaction.$queryRaw<
-            Array<{ status: string }>
-          >`
-            SELECT "status" FROM "batches" WHERE "id" = ${sale.batch_id}::uuid
-          `;
+          const [updatedBatch] = sale.batch_id
+            ? await transaction.$queryRaw<Array<{ status: string }>>`
+                SELECT "status" FROM "batches" WHERE "id" = ${sale.batch_id}::uuid
+              `
+            : [];
+          const [updatedProduct] =
+            sale.batch_id === null && saleReference.product_id
+              ? await transaction.$queryRaw<
+                  Array<{ stock_quantity: Prisma.Decimal | null }>
+                >`
+                  SELECT "stock_quantity" FROM "products" WHERE "id" = ${saleReference.product_id}::uuid
+                `
+              : [];
 
           await transaction.auditLog.create({
             data: {
@@ -962,7 +973,9 @@ export class PosService {
               status: "voided",
               voided_at: saleVoid.voidedAt.toISOString(),
               voided_by: actor.id,
-              batch_status: updatedBatch?.status ?? batch.status,
+              batch_status: updatedBatch?.status ?? batch?.status ?? null,
+              product_stock_quantity:
+                updatedProduct?.stock_quantity?.toNumber() ?? null,
             },
           };
           await transaction.$executeRaw`
@@ -1006,19 +1019,30 @@ export class PosService {
   }
 
   private mapSale(sale: SaleWithRelations) {
+    const batch = sale.batch;
+    const product = sale.product;
     return {
       id: sale.id,
       sale_code: sale.saleCode,
       created_at: sale.createdAt.toISOString(),
       batch_id: sale.batchId,
-      batch_code: sale.batch.batchCode,
-      species_id: sale.batch.species.id,
-      species_code: sale.batch.species.speciesCode,
-      species_name: sale.batch.species.speciesName,
-      fish_size: sale.batch.incomingFish?.fishSize ?? null,
+      batch_code: batch?.batchCode ?? null,
+      product_id: sale.productId,
+      product_sku: product?.sku ?? null,
+      product_name: product?.name ?? null,
+      tracking_mode: product?.trackingMode ?? "BATCH_TRACKED",
+      species_id: batch?.species.id ?? null,
+      species_code: batch?.species.speciesCode ?? null,
+      species_name: batch?.species.speciesName ?? product?.name ?? null,
+      fish_size:
+        batch?.incomingFish?.fishSize ??
+        product?.sizeLabel ??
+        product?.unit ??
+        null,
       quantity: sale.quantity,
       unit_price: Number(sale.unitPrice),
-      total_amount: Number(sale.totalAmount),
+      total_price: Number(sale.totalPrice),
+      total_amount: Number(sale.totalPrice),
       payment_method: sale.paymentMethod,
       cash_received:
         sale.cashReceived === null ? null : Number(sale.cashReceived),
@@ -1033,26 +1057,13 @@ export class PosService {
     };
   }
 
-  private mapPrice(price: PriceWithRelations) {
-    return {
-      id: price.id,
-      species_id: price.species.id,
-      species_code: price.species.speciesCode,
-      species_name: price.species.speciesName,
-      fish_size: price.fishSize,
-      price_per_fish: Number(price.pricePerFish),
-      created_at: price.createdAt.toISOString(),
-      updated_at: price.updatedAt.toISOString(),
-      updated_by: { id: price.updater.id, name: price.updater.name },
-    };
-  }
-
   private mapPosBatch(batch: PosBatchRow) {
     return {
       batch: {
         id: batch.batch_id,
         batch_code: batch.batch_code,
         status: batch.status,
+        sale_readiness: batch.sale_readiness,
         current_stock: Number(batch.current_stock),
       },
       species: {
@@ -1063,16 +1074,6 @@ export class PosService {
       fish_size: batch.fish_size,
       unit_price: batch.unit_price === null ? null : Number(batch.unit_price),
     };
-  }
-
-  private assertPriceInRange(price: number): void {
-    if (!Number.isInteger(price) || price < 1 || price > 10_000_000) {
-      throw new ApiException(
-        HttpStatus.UNPROCESSABLE_ENTITY,
-        "PRICE_OUT_OF_RANGE",
-        "Harga per ekor harus antara Rp1 dan Rp10.000.000.",
-      );
-    }
   }
 
   private async loadCachedResponse(

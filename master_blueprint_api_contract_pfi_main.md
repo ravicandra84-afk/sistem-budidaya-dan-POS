@@ -2,7 +2,7 @@
 
 ## Master Blueprint & API Contract: Penerimaan Ikan dan Kasir/POS
 
-**Status:** Dokumen V4.5 asli dipertahankan apa adanya; rancangan POS ditambahkan sebagai perluasan MVP.
+**Status:** V4.5 tetap menjadi baseline terkunci; Addendum V4.6 pasca-MVP disetujui Owner dan dicatat pada Bagian III.
 
 **Cakupan:**
 
@@ -15,6 +15,7 @@
 2. Bagian II adalah perluasan untuk Ikan Keluar (Kasir/POS). Keputusan teknis TBD-03, TBD-04, dan TBD-06 telah disetujui melalui [ADR 0002](docs/adr/0002-pos-gate-architecture.md); kontrak API normatif berada di [docs/pos-api-contract.md](docs/pos-api-contract.md). Uji perangkat fisik GPOS-04 tetap wajib sebelum klaim kompatibilitas.
 3. Aturan VOID penerimaan pada V4.5 tetap memerlukan alasan dan tetap tunduk pada aturan transaksi turunan. Aturan VOID penjualan POS adalah aturan terpisah: tidak memerlukan alasan dan membatalkan satu transaksi penjualan secara utuh.
 4. Penambahan POS tidak menghapus atau menggantikan aturan penerimaan, identitas batch 1:1, computed stock, append-only, RBAC, idempotency, ACID, dan audit pada V4.5.
+5. Bagian III adalah keputusan V4.6 untuk katalog multi-produk dan kesiapan jual. Bagian I dan siklus hidup batch V4.5 tetap utuh; untuk transaksi katalog V4.6, Bagian III menjadi kontrak tambahan.
 
 ---
 
@@ -1219,10 +1220,47 @@ Keputusan bisnis utama POS telah dijawab, dan sebagian besar keputusan teknis te
 5.  **Detail sequence penjualan (`TBD-05` — `APPROVED — OWNER`):** ditetapkan menggunakan tabel `sale_daily_sequences` (`sale_date DATE PRIMARY KEY`, `last_number BIGINT NOT NULL CHECK (last_number >= 0)`) dengan padding minimal tiga digit dan bertambah panjang melewati 999.
 6.  **Audit action, DDL, dan hak database (`TBD-06` — `APPROVED — OWNER`, ADR 0002 amendment):** empat tabel POS, kalkulasi stok, trigger, guard transaksi turunan, index, action (`CREATE_SALE`, `VOID_SALE`, `CREATE_SALE_PRICE`, `UPDATE_SALE_PRICE`), dan granular privileges runtime telah disetujui untuk implementasi.
 
-## 18. Gerbang persetujuan sebelum implementasi
+# BAGIAN III — ADDENDUM V4.6 PASCA-MVP (`APPROVED — OWNER`)
 
-Implementasi POS belum boleh dimulai hanya berdasarkan dokumen rancangan
-ini. Tahapan persetujuan yang disarankan:
+## 19. Kesiapan jual batch
+
+1. Lifecycle `batches.status` V4.5 tidak berubah: `active`, `completed`, dan `voided`. Constraint dan trigger transisi status V4.5 tetap dipertahankan.
+2. Kesiapan jual merupakan atribut terpisah `sale_readiness`, bernilai `BELUM_SIAP` (default untuk batch lama dan baru) atau `SIAP_JUAL`.
+3. Batch hanya boleh dijual jika `status = 'active'`, `sale_readiness = 'SIAP_JUAL'`, dan stok valid lebih dari nol.
+4. Hanya `Kepala Budidaya` dan `Owner` yang boleh mengubah kesiapan ke atau dari `SIAP_JUAL`. Setiap perubahan harus menambahkan jejak di `batch_sale_readiness_histories` secara atomik.
+5. Tabel histori memuat UUIDv4, `batch_id`, `from_readiness` nullable, `to_readiness`, `changed_by` UUIDv4, `note` nullable, dan `created_at TIMESTAMPTZ`. Tabel bersifat append-only; aktor berasal dari JWT terverifikasi.
+
+## 20. Katalog produk POS
+
+1. Katalog memiliki kategori dinamis dengan nama dan kode/slug unik, `requires_batch`, status aktif, dan timestamp. Kategori contoh: Benih Ikan, Ikan Konsumsi, Pakan & Nutrisi, Obat & Probiotik, serta Sarana Budidaya.
+2. Produk memiliki SKU unik, nama, kategori, `tracking_mode` (`BATCH_TRACKED`/`NON_BATCH`), pemetaan jenis/ukuran ikan nullable, unit, harga, stok langsung nullable untuk non-batch, status aktif, dan timestamp. Produk/kategori diarsipkan melalui `is_active`; tidak dihapus.
+3. Harga katalog memakai `NUMERIC(12,2)`, nilai harus `> 0` dan `<= 10000000.00`. Pengelolaan tambah/ubah/arsip hanya untuk Owner dan role yang disebut Admin pada keputusan ini; dalam implementasi saat ini Admin dipetakan ke `Admin Operasional`, bukan role baru.
+4. Stok `BATCH_TRACKED` adalah agregasi stok valid dari batch `active`/`SIAP_JUAL`; kasir tetap memilih batch tertentu. `NON_BATCH` menggunakan stok produk dan tidak memiliki batch.
+5. Penulisan histori/audit katalog wajib append-only dan atomik dengan mutasi. Nama action audit khusus V4.6, tipe jumlah/stok, pemulihan stok non-batch saat VOID, dan konsistensi kategori dengan mode tracking dikunci pada P8-01/P8-02 sebelum penerapan.
+
+## 21. Penjualan V4.6 dan kompatibilitas histori
+
+1. `fish_sales` tetap append-only serta mempertahankan `sale_daily_sequences` dan sembilan field resmi struk.
+2. Tambahkan `product_id` nullable untuk menjaga pembacaan baris historis; penjualan baru wajib memiliki produk. `batch_id` menjadi nullable untuk `NON_BATCH`, wajib untuk `BATCH_TRACKED`.
+3. Endpoint pembuatan penjualan katalog adalah `POST /api/v1/sales`. Setiap mutasi memakai idempotency UUIDv4. Untuk `BATCH_TRACKED`, backend wajib melakukan `SELECT ... FOR UPDATE` pada batch dan memvalidasi ulang status `active`, kesiapan `SIAP_JUAL`, stok, harga, dan pembayaran sebelum commit. Detail kontrak API serta transisi dengan route V4.5 `/api/v1/pos/*` dikunci di P8-02.
+4. Nilai sembilan field struk tidak boleh bertambah. Pemetaan identitas produk `NON_BATCH` ke field spesies/ukuran serta penyimpanan snapshot dan pembayaran dua-desimal harus dikunci dan diuji di P8-02; tidak boleh ada pembulatan diam-diam.
+5. P8-01 wajib merancang migrasi aditif/non-destruktif, menjaga semua baris historis `fish_sales` dan harga lama, serta memperluas grants/guard tanpa mengubah trigger lifecycle V4.5. `schema.prisma` dan database tidak berubah sebagai bagian persetujuan dokumen ini.
+
+## 22. Gate implementasi V4.6
+
+Task Phase 8 yang dibuka pada `implementation_plan.md` adalah P8-01 (skema/migrasi), P8-02 (backend API/RBAC), dan P8-03 (frontend). P8-01 menjadi task aktif setelah addendum ini; pekerjaan implementasi tetap menunggu instruksi berikutnya. Semua perubahan harus mempertahankan regression V4.5 dan append-only.
+
+## 23. Status addendum
+
+Addendum ini disetujui Owner pada 2026-11-22. Persyaratan ini menambah scope pasca-MVP V4.6 dan tidak mengubah kontrak V4.5 sebelum migrasi serta rilis V4.6 yang disetujui.
+
+---
+
+## Gerbang persetujuan POS V4.5 (catatan baseline)
+
+Bagian ini mencatat gate desain POS V4.5 sebelum ADR 0002 disetujui. Gate POS V4.5 kini lulus; Phase 8 V4.6 mengikuti persetujuan dan task pada Bagian III serta `implementation_plan.md`.
+
+Tahapan persetujuan baseline V4.5:
 
 1.  Review seluruh keputusan bisnis POS pada Bagian 8.
 2.  Review alur POS pada Bagian 9.
