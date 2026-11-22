@@ -1,4 +1,5 @@
 "use client";
+import { generateUuidV4 } from "@/lib/uuid";
 
 import {
   AlertTriangle,
@@ -110,7 +111,7 @@ export default function BatchDetailPage() {
       !voidAttempt.current ||
       voidAttempt.current.fingerprint !== fingerprint
     ) {
-      voidAttempt.current = { fingerprint, key: crypto.randomUUID() };
+      voidAttempt.current = { fingerprint, key: generateUuidV4() };
     }
 
     setVoiding(true);

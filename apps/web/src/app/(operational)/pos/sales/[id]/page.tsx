@@ -1,4 +1,5 @@
 "use client";
+import { generateUuidV4 } from "@/lib/uuid";
 
 import {
   AlertTriangle,
@@ -190,7 +191,7 @@ export default function PosSaleDetailPage() {
         {
           method: "POST",
           token: session.accessToken,
-          headers: { "Idempotency-Key": crypto.randomUUID() },
+          headers: { "Idempotency-Key": generateUuidV4() },
           body: JSON.stringify({}),
         },
       );

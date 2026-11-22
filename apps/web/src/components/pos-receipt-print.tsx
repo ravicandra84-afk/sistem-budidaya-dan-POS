@@ -1,9 +1,14 @@
 "use client";
 
-import { Printer } from "lucide-react";
+import { Bluetooth, Printer, Usb } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { buildEscPosReceiptBytes } from "@/lib/escpos-receipt";
 import { formatInteger, formatPosRupiah } from "@/lib/format";
+import {
+  isWebBluetoothSupported,
+  printViaWebBluetooth,
+} from "@/lib/web-bluetooth-printer";
 
 export interface PosReceiptData {
   company_name: string;
@@ -16,6 +21,21 @@ export interface PosReceiptData {
   payment_method: "cash" | "transfer";
   cashier_name: string;
 }
+
+interface SerialPortConnection {
+  open(options: { baudRate: number }): Promise<void>;
+  writable: WritableStream<Uint8Array> | null;
+  close(): Promise<void>;
+}
+
+interface SerialApi {
+  requestPort(): Promise<SerialPortConnection>;
+}
+
+type ThermalStatus = {
+  kind: "info" | "error";
+  message: string;
+};
 
 export function PosReceiptPrint({
   receipt,
@@ -33,6 +53,9 @@ export function PosReceiptPrint({
   const [printState, setPrintState] = useState<"idle" | "requested" | "failed">(
     "idle",
   );
+  const [thermalStatus, setThermalStatus] = useState<ThermalStatus | null>(
+    null,
+  );
   const autoPrintAttempted = useRef(false);
 
   useEffect(() => {
@@ -42,7 +65,107 @@ export function PosReceiptPrint({
   }, [autoPrint]);
 
   function printAgain() {
+    setThermalStatus(null);
     setPrintState(requestBrowserPrint() ? "requested" : "failed");
+  }
+
+  async function printToBluetooth(): Promise<void> {
+    if (!isWebBluetoothSupported()) {
+      setThermalStatus({
+        kind: "error",
+        message:
+          "Web Bluetooth tidak tersedia. Gunakan Chrome pada koneksi HTTPS atau localhost.",
+      });
+      return;
+    }
+
+    setThermalStatus({
+      kind: "info",
+      message: "Menghubungkan ke printer Bluetooth...",
+    });
+
+    try {
+      const bytes = buildEscPosReceiptBytes(receipt, paperWidth);
+      await printViaWebBluetooth(bytes);
+      setThermalStatus({
+        kind: "info",
+        message: "Struk berhasil dikirim ke printer Bluetooth.",
+      });
+    } catch (error) {
+      setThermalStatus({
+        kind: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Cetak Bluetooth gagal. Penjualan tetap tersimpan.",
+      });
+    }
+  }
+
+  async function printToSerial(): Promise<void> {
+    setThermalStatus(null);
+
+    const serialApi = getSerialApi();
+    if (!serialApi) {
+      setThermalStatus({
+        kind: "error",
+        message:
+          "Browser ini tidak mendukung Web Serial. Gunakan cetak sistem atau browser yang mendukung Web Serial.",
+      });
+      return;
+    }
+
+    let port: SerialPortConnection | undefined;
+    let writer: WritableStreamDefaultWriter<Uint8Array> | undefined;
+    let failed = false;
+    let failure: unknown;
+
+    try {
+      port = await serialApi.requestPort();
+      await port.open({ baudRate: 9600 });
+      if (!port.writable) throw new Error("Serial port is not writable");
+
+      writer = port.writable.getWriter();
+      await writer.write(buildEscPosReceiptBytes(receipt, paperWidth));
+    } catch (error) {
+      failed = true;
+      failure = error;
+    } finally {
+      try {
+        writer?.releaseLock();
+      } catch (error) {
+        if (!failed) {
+          failed = true;
+          failure = error;
+        }
+      }
+
+      if (port) {
+        try {
+          await port.close();
+        } catch (error) {
+          if (!failed) {
+            failed = true;
+            failure = error;
+          }
+        }
+      }
+    }
+
+    if (failed) {
+      setThermalStatus({
+        kind: "error",
+        message: isNotFoundError(failure)
+          ? "Pemilihan printer dibatalkan. Penjualan tetap tersimpan dan tidak dibuat ulang."
+          : "Koneksi atau pengiriman ke printer gagal. Periksa printer lalu coba lagi; penjualan tetap tersimpan.",
+      });
+      return;
+    }
+
+    setThermalStatus({
+      kind: "info",
+      message: "Payload ESC/POS berhasil dikirim ke printer thermal.",
+    });
   }
 
   return (
@@ -79,8 +202,35 @@ export function PosReceiptPrint({
           <Printer className="size-4" aria-hidden="true" />
           {printState === "failed" ? "Coba Cetak Ulang" : printButtonLabel}
         </Button>
+        <Button
+          onClick={() => void printToBluetooth()}
+          type="button"
+          variant="secondary"
+        >
+          <Bluetooth className="size-4" aria-hidden="true" />
+          Cetak Thermal (Bluetooth)
+        </Button>
+        <Button
+          onClick={() => void printToSerial()}
+          type="button"
+          variant="secondary"
+        >
+          <Usb className="size-4" aria-hidden="true" />
+          Cetak Thermal (USB/Serial)
+        </Button>
       </div>
-      {printState === "failed" ? (
+      {thermalStatus ? (
+        <p
+          className={`pos-receipt-print-status mb-3 px-3 py-2 text-sm ${
+            thermalStatus.kind === "error"
+              ? "border-l-4 border-danger bg-[#fef2f2] text-danger"
+              : "text-slate-600"
+          }`}
+          role={thermalStatus.kind === "error" ? "alert" : "status"}
+        >
+          {thermalStatus.message}
+        </p>
+      ) : printState === "failed" ? (
         <p
           className="pos-receipt-print-status mb-3 border-l-4 border-danger bg-[#fef2f2] px-3 py-2 text-sm text-danger"
           role="alert"
@@ -146,6 +296,20 @@ function requestBrowserPrint(): boolean {
   } catch {
     return false;
   }
+}
+
+function getSerialApi(): SerialApi | undefined {
+  if (typeof navigator === "undefined") return undefined;
+  return (navigator as Navigator & { serial?: SerialApi }).serial;
+}
+
+function isNotFoundError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    error.name === "NotFoundError"
+  );
 }
 
 function ReceiptLine({

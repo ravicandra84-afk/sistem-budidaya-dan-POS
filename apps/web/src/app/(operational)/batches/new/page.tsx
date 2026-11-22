@@ -1,4 +1,5 @@
 "use client";
+import { generateUuidV4 } from "@/lib/uuid";
 
 import {
   AlertCircle,
@@ -135,7 +136,7 @@ export default function NewReceivingPage() {
 
     const fingerprint = JSON.stringify(parsed.data);
     if (!attempt.current || attempt.current.fingerprint !== fingerprint) {
-      attempt.current = { fingerprint, key: crypto.randomUUID() };
+      attempt.current = { fingerprint, key: generateUuidV4() };
     }
 
     setSubmitting(true);

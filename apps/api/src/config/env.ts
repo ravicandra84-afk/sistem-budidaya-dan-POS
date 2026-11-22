@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 import { resolve } from "node:path";
 import { z } from "zod";
 
-dotenv.config({ path: resolve(__dirname, "../../../../.env"), quiet: true });
+dotenv.config({ path: resolve(__dirname, "../../../../.env"), quiet: true, override: true });
 
 const originSchema = z
   .string()

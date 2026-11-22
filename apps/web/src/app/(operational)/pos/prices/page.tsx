@@ -1,4 +1,5 @@
 "use client";
+import { generateUuidV4 } from "@/lib/uuid";
 
 import {
   CircleDollarSign,
@@ -184,7 +185,7 @@ export default function PosPricesPage() {
           {
             method: "PATCH",
             token: session.accessToken,
-            headers: { "Idempotency-Key": crypto.randomUUID() },
+            headers: { "Idempotency-Key": generateUuidV4() },
             body: JSON.stringify({ price_per_fish: parsedPrice }),
           },
         );
@@ -192,7 +193,7 @@ export default function PosPricesPage() {
         await apiRequest<PriceItem>("/pos/prices", {
           method: "POST",
           token: session.accessToken,
-          headers: { "Idempotency-Key": crypto.randomUUID() },
+          headers: { "Idempotency-Key": generateUuidV4() },
           body: JSON.stringify({
             species_id: speciesId,
             fish_size: fishSize,

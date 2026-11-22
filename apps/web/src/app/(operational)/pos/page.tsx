@@ -1,4 +1,5 @@
 "use client";
+import { generateUuidV4 } from "@/lib/uuid";
 
 import {
   AlertTriangle,
@@ -272,7 +273,7 @@ export default function PosPage() {
     const idempotencyKey =
       uncertainAttempt?.payload === payloadKey
         ? uncertainAttempt.key
-        : crypto.randomUUID();
+        : generateUuidV4();
 
     setSubmitting(true);
     setCheckoutError("");

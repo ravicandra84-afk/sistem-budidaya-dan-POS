@@ -134,6 +134,9 @@ test("receipt contains only the nine official fields and fits both print widths"
       const controls = element.querySelector<HTMLElement>(
         ".pos-receipt-controls",
       );
+      const printStatus = element.querySelector<HTMLElement>(
+        ".pos-receipt-print-status",
+      );
       return {
         width: Number.parseFloat(getComputedStyle(element).width),
         clientWidth: element.clientWidth,
@@ -143,6 +146,9 @@ test("receipt contains only the nine official fields and fits both print widths"
         controlsDisplay: controls
           ? getComputedStyle(controls).display
           : "missing",
+        printStatusDisplay: printStatus
+          ? getComputedStyle(printStatus).display
+          : "missing",
       };
     });
     expect(layout.width).toBeCloseTo((Number(width) * 96) / 25.4, 0);
@@ -150,6 +156,7 @@ test("receipt contains only the nine official fields and fits both print widths"
     expect(layout.rowsFit).toBe(true);
     expect(layout.rowCount).toBe(9);
     expect(layout.controlsDisplay).toBe("none");
+    expect(layout.printStatusDisplay).toBe("none");
     await expect(page.locator("aside")).toHaveCSS("visibility", "hidden");
     await expect(page.locator("main h1")).toHaveCSS("visibility", "hidden");
     await page.emulateMedia({ media: "screen" });

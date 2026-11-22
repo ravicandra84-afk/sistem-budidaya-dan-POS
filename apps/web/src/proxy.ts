@@ -24,7 +24,7 @@ export function proxy(request: NextRequest) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    `connect-src 'self' ${apiOrigin}${isDevelopment ? " ws://localhost:3000" : ""}`,
+    `connect-src 'self' ${apiOrigin}${isDevelopment ? " ws://localhost:3000 ws://192.168.0.79:3000" : ""}`,
     ...(!isDevelopment ? ["upgrade-insecure-requests"] : []),
   ].join("; ");
   const requestHeaders = new Headers(request.headers);

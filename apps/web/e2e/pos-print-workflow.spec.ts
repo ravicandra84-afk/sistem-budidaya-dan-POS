@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { buildEscPosReceiptBytes } from "../src/lib/escpos-receipt";
 
 const batchId = "11111111-1111-4111-8111-111111111111";
 const saleId = "22222222-2222-4222-8222-222222222222";
@@ -45,6 +46,108 @@ async function setPrintBehavior(
       },
     });
   }, behavior);
+}
+
+async function setSerialBehavior(page: Page) {
+  await page.addInitScript(() => {
+    const state = {
+      requestPortCalls: 0,
+      baudRate: 0,
+      byteCount: 0,
+      lockReleased: false,
+      portClosed: false,
+    };
+    Object.defineProperty(window, "__posSerialState", {
+      configurable: true,
+      value: state,
+    });
+    Object.defineProperty(navigator, "serial", {
+      configurable: true,
+      value: {
+        requestPort: async () => {
+          state.requestPortCalls += 1;
+          return {
+            open: async ({ baudRate }: { baudRate: number }) => {
+              state.baudRate = baudRate;
+            },
+            writable: {
+              getWriter: () => ({
+                write: async (bytes: Uint8Array) => {
+                  state.byteCount = bytes.length;
+                },
+                releaseLock: () => {
+                  state.lockReleased = true;
+                },
+              }),
+            },
+            close: async () => {
+              state.portClosed = true;
+            },
+          };
+        },
+      },
+    });
+  });
+}
+
+async function setBluetoothBehavior(page: Page) {
+  await page.addInitScript(() => {
+    const state = {
+      requestOptions: null as {
+        acceptAllDevices: boolean;
+        optionalServices: string[];
+      } | null,
+      connected: false,
+      discoveredServices: false,
+      discoveredCharacteristics: false,
+      chunks: [] as number[][],
+      disconnected: false,
+    };
+    Object.defineProperty(window, "__posBluetoothState", {
+      configurable: true,
+      value: state,
+    });
+    Object.defineProperty(navigator, "bluetooth", {
+      configurable: true,
+      value: {
+        requestDevice: async (options: typeof state.requestOptions) => {
+          state.requestOptions = options;
+          return {
+            gatt: {
+              connect: async () => {
+                state.connected = true;
+                return {
+                  getPrimaryServices: async () => {
+                    state.discoveredServices = true;
+                    return [
+                      {
+                        getCharacteristics: async () => {
+                          state.discoveredCharacteristics = true;
+                          return [
+                            {
+                              properties: { writeWithoutResponse: true },
+                              writeValueWithoutResponse: async (
+                                bytes: Uint8Array,
+                              ) => {
+                                state.chunks.push(Array.from(bytes));
+                              },
+                            },
+                          ];
+                        },
+                      },
+                    ];
+                  },
+                };
+              },
+              disconnect: () => {
+                state.disconnected = true;
+              },
+            },
+          };
+        },
+      },
+    });
+  });
 }
 
 async function setKasirSession(page: Page, userId = "kasir-actor") {
@@ -151,6 +254,97 @@ test("successful committed sale triggers auto-print exactly once", async ({
   await expect(page.getByRole("status")).toContainText(
     "Dialog cetak sistem telah diminta",
   );
+});
+
+test("thermal serial print sends bytes without changing the system print or sale flow", async ({
+  page,
+}) => {
+  await setPrintBehavior(page, "succeed");
+  await setSerialBehavior(page);
+  const api = await stubCashierSale(page);
+
+  await page
+    .getByRole("button", { name: "Cetak Thermal (USB/Serial)" })
+    .click();
+  await expect(page.getByRole("status")).toContainText(
+    "Payload ESC/POS berhasil dikirim",
+  );
+  const serialState = await page.evaluate(
+    () =>
+      (
+        window as Window & {
+          __posSerialState: {
+            requestPortCalls: number;
+            baudRate: number;
+            byteCount: number;
+            lockReleased: boolean;
+            portClosed: boolean;
+          };
+        }
+      ).__posSerialState,
+  );
+  expect(serialState).toEqual({
+    requestPortCalls: 1,
+    baudRate: 9600,
+    byteCount: expect.any(Number),
+    lockReleased: true,
+    portClosed: true,
+  });
+  expect(serialState.byteCount).toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: "Cetak Struk" }).click();
+  await expect.poll(() => printCallCount(page)).toBe(2);
+  expect(api.postCount).toBe(1);
+});
+
+test("thermal Bluetooth print sends all ESC/POS chunks and disconnects without repeating the sale", async ({
+  page,
+}) => {
+  await setPrintBehavior(page, "succeed");
+  await setBluetoothBehavior(page);
+  const api = await stubCashierSale(page);
+
+  await page
+    .getByRole("button", { name: "Cetak Thermal (Bluetooth)" })
+    .click();
+  await expect(page.getByRole("status")).toContainText(
+    "Struk berhasil dikirim ke printer Bluetooth",
+  );
+
+  const bluetoothState = await page.evaluate(
+    () =>
+      (
+        window as Window & {
+          __posBluetoothState: {
+            requestOptions: {
+              acceptAllDevices: boolean;
+              optionalServices: string[];
+            } | null;
+            connected: boolean;
+            discoveredServices: boolean;
+            discoveredCharacteristics: boolean;
+            chunks: number[][];
+            disconnected: boolean;
+          };
+        }
+      ).__posBluetoothState,
+  );
+  const sentBytes = bluetoothState.chunks.flat();
+  expect(bluetoothState.requestOptions?.acceptAllDevices).toBe(true);
+  expect(bluetoothState.requestOptions?.optionalServices).toContain(
+    "000018f0-0000-1000-8000-00805f9b34fb",
+  );
+  expect(bluetoothState.connected).toBe(true);
+  expect(bluetoothState.discoveredServices).toBe(true);
+  expect(bluetoothState.discoveredCharacteristics).toBe(true);
+  expect(bluetoothState.chunks.length).toBeGreaterThan(1);
+  expect(bluetoothState.chunks.every((chunk) => chunk.length <= 64)).toBe(true);
+  expect(sentBytes).toEqual(Array.from(buildEscPosReceiptBytes(receipt, "58")));
+  expect(bluetoothState.disconnected).toBe(true);
+
+  await page.getByRole("button", { name: "Cetak Struk" }).click();
+  await expect.poll(() => printCallCount(page)).toBe(2);
+  expect(api.postCount).toBe(1);
 });
 
 test("print failure leaves sale successful and retry never posts a second sale", async ({

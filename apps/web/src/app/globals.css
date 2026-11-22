@@ -56,6 +56,10 @@ textarea:focus-visible {
   background: rgb(24 183 176 / 22%);
 }
 
+@page {
+  margin: 0;
+}
+
 @page pfi-receipt-58 {
   size: 58mm auto;
   margin: 0;
@@ -113,7 +117,8 @@ textarea:focus-visible {
     width: 80mm !important;
   }
 
-  .pos-receipt-controls {
+  .pos-receipt-controls,
+  .pos-receipt-print-status {
     display: none !important;
   }
 
