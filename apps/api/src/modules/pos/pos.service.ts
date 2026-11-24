@@ -252,6 +252,28 @@ export class PosService {
             );
           }
 
+          const quantity = new Prisma.Decimal(input.quantity.toString());
+          if (
+            product.tracking_mode === "BATCH_TRACKED" &&
+            (!Number.isInteger(input.quantity) || input.quantity < 1)
+          ) {
+            throw new ApiException(
+              HttpStatus.UNPROCESSABLE_ENTITY,
+              "INVALID_PAYLOAD",
+              "Kuantitas BATCH_TRACKED harus berupa bilangan bulat minimal 1.",
+            );
+          }
+          if (
+            product.tracking_mode === "NON_BATCH" &&
+            (!quantity.greaterThan(0) || quantity.decimalPlaces() > 2)
+          ) {
+            throw new ApiException(
+              HttpStatus.UNPROCESSABLE_ENTITY,
+              "INVALID_PAYLOAD",
+              "Kuantitas NON_BATCH harus lebih dari 0 dengan maksimal dua desimal.",
+            );
+          }
+
           if (product.tracking_mode === "BATCH_TRACKED") {
             if (!input.batch_id) {
               throw new ApiException(
@@ -321,7 +343,7 @@ export class PosService {
             );
           }
 
-          const totalPrice = unitPrice.mul(input.quantity).toDecimalPlaces(2);
+          const totalPrice = unitPrice.mul(quantity).toDecimalPlaces(2);
           if (totalPrice.greaterThan("999999999999.99")) {
             throw new ApiException(
               HttpStatus.UNPROCESSABLE_ENTITY,
@@ -355,7 +377,7 @@ export class PosService {
                   )[0]?.current_stock ?? 0n,
                 )
               : (product.stock_quantity?.toNumber() ?? 0);
-          if (input.quantity > availableQuantity) {
+          if (quantity.greaterThan(availableQuantity)) {
             throw new ApiException(
               HttpStatus.CONFLICT,
               "INSUFFICIENT_STOCK",
@@ -394,7 +416,7 @@ export class PosService {
               saleCode,
               batchId: batch?.id ?? null,
               productId: product.id,
-              quantity: input.quantity,
+              quantity,
               unitPrice,
               totalPrice,
               paymentMethod: input.payment_method,
@@ -431,7 +453,7 @@ export class PosService {
                 species_id: batch?.species_id ?? null,
                 species_name: batch?.species_name ?? product.name,
                 fish_size: batch?.fish_size ?? product.unit,
-                quantity: sale.quantity,
+                quantity: sale.quantity.toNumber(),
                 unit_price: unitPrice.toNumber(),
                 total_price: totalPrice.toNumber(),
                 total_amount: totalPrice.toNumber(),
@@ -446,15 +468,19 @@ export class PosService {
                 status: "active",
               },
               receipt: {
-                company_name: companyName,
-                transaction_date_time: formatReceiptDateTime(createdAt),
-                species_name: batch?.species_name ?? product.sku,
-                fish_size: batch?.fish_size ?? product.unit,
-                quantity: sale.quantity,
-                unit_price: unitPrice.toNumber(),
-                total_payment: totalPrice.toNumber(),
-                payment_method: sale.paymentMethod,
-                cashier_name: actor.name,
+                ...this.mapReceipt({
+                  createdAt,
+                  batchSpeciesName: batch?.species_name ?? null,
+                  batchFishSize: batch?.fish_size ?? null,
+                  productName: product.name,
+                  productSku: product.sku,
+                  productUnit: product.unit,
+                  quantity: sale.quantity,
+                  unitPrice,
+                  totalPrice,
+                  paymentMethod: sale.paymentMethod,
+                  cashierName: actor.name,
+                }),
               },
             },
           };
@@ -588,20 +614,19 @@ export class PosService {
       status: "success" as const,
       message: "Data struk berhasil dimuat.",
       data: {
-        company_name: companyName,
-        transaction_date_time: formatReceiptDateTime(sale.createdAt),
-        species_name:
-          sale.batch?.species.speciesName ?? sale.product?.name ?? null,
-        fish_size:
-          sale.batch?.incomingFish?.fishSize ??
-          sale.product?.sizeLabel ??
-          sale.product?.unit ??
-          null,
-        quantity: sale.quantity,
-        unit_price: Number(sale.unitPrice),
-        total_payment: Number(sale.totalPrice),
-        payment_method: sale.paymentMethod,
-        cashier_name: sale.creator.name,
+        ...this.mapReceipt({
+          createdAt: sale.createdAt,
+          batchSpeciesName: sale.batch?.species.speciesName ?? null,
+          batchFishSize: sale.batch?.incomingFish?.fishSize ?? null,
+          productName: sale.product?.name ?? null,
+          productSku: sale.product?.sku ?? null,
+          productUnit: sale.product?.unit ?? null,
+          quantity: sale.quantity,
+          unitPrice: sale.unitPrice,
+          totalPrice: sale.totalPrice,
+          paymentMethod: sale.paymentMethod,
+          cashierName: sale.creator.name,
+        }),
       },
       meta: { request_id: requestId },
     };
@@ -1016,6 +1041,33 @@ export class PosService {
       }
       throw error;
     }
+  }
+
+  private mapReceipt(input: {
+    createdAt: Date;
+    batchSpeciesName: string | null;
+    batchFishSize: string | null;
+    productName: string | null;
+    productSku: string | null;
+    productUnit: string | null;
+    quantity: Prisma.Decimal | number;
+    unitPrice: Prisma.Decimal | number;
+    totalPrice: Prisma.Decimal | number;
+    paymentMethod: string;
+    cashierName: string;
+  }) {
+    return {
+      company_name: companyName,
+      transaction_date_time: formatReceiptDateTime(input.createdAt),
+      species_name: input.batchSpeciesName ?? input.productName ?? "",
+      fish_size: input.batchFishSize ?? input.productSku ?? "",
+      quantity: Number(input.quantity),
+      unit: input.productUnit ?? "",
+      unit_price: Number(input.unitPrice),
+      total_payment: Number(input.totalPrice),
+      payment_method: input.paymentMethod,
+      cashier_name: input.cashierName,
+    };
   }
 
   private mapSale(sale: SaleWithRelations) {

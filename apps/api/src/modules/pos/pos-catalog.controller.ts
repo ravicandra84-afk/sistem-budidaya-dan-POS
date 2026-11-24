@@ -15,6 +15,7 @@ import {
 } from "@nestjs/common";
 import {
   PRICE_MANAGEMENT_ROLES,
+  POS_ROLES,
   USER_ROLES,
   createProductCategorySchema,
   createProductSchema,
@@ -164,7 +165,7 @@ export class PosSellableCatalogController {
   constructor(private readonly catalogService: PosCatalogService) {}
 
   @Get()
-  @Roles(...USER_ROLES)
+  @Roles(...POS_ROLES)
   list(@Req() request: RequestWithId) {
     return this.catalogService.getSellableCatalog(request.requestId);
   }

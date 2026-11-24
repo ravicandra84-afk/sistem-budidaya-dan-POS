@@ -360,7 +360,7 @@ databaseSuite("POS create-sale HTTP integration", () => {
       .set("Authorization", `Bearer ${accessToken(fixture.user)}`);
   }
 
-  function getReceipt(fixture: SaleFixture, saleId: string) {
+  function getReceipt(fixture: Pick<ProductFixture, "user">, saleId: string) {
     return request(app.getHttpServer())
       .get(`${endpoint}/${saleId}/receipt`)
       .set("Authorization", `Bearer ${accessToken(fixture.user)}`);
@@ -529,6 +529,7 @@ databaseSuite("POS create-sale HTTP integration", () => {
         "species_name",
         "fish_size",
         "quantity",
+        "unit",
         "unit_price",
         "total_payment",
         "payment_method",
@@ -575,6 +576,7 @@ databaseSuite("POS create-sale HTTP integration", () => {
       "species_name",
       "fish_size",
       "quantity",
+      "unit",
       "unit_price",
       "total_payment",
       "payment_method",
@@ -620,6 +622,10 @@ databaseSuite("POS create-sale HTTP integration", () => {
 
   it("sells and VOID-restores NON_BATCH product stock with batch_id null", async () => {
     const fixture = await createNonBatchFixture("Kasir");
+    const product = await admin.product.findUniqueOrThrow({
+      where: { id: fixture.productId },
+      select: { sku: true },
+    });
     const salePayload = {
       product_id: fixture.productId,
       batch_id: null,
@@ -637,7 +643,7 @@ databaseSuite("POS create-sale HTTP integration", () => {
       unit_price: 1250.5,
       total_price: 2501,
     });
-    expect(response.body.data.receipt.fish_size).toBe("SAK");
+    expect(response.body.data.receipt.fish_size).toBe(product.sku);
     const afterSale = await admin.product.findUniqueOrThrow({
       where: { id: fixture.productId },
       select: { stockQuantity: true },
@@ -653,6 +659,117 @@ databaseSuite("POS create-sale HTTP integration", () => {
     });
     expect(afterVoid.stockQuantity?.toNumber()).toBe(10);
     expect((await voidSale(fixture, saleId)).status).toBe(409);
+  });
+
+  it("sells fractional NON_BATCH quantity and returns the same nine-slot receipt on reprint", async () => {
+    const fixture = await createNonBatchFixture("Kasir");
+    const product = await admin.product.findUniqueOrThrow({
+      where: { id: fixture.productId },
+    });
+    const response = await postV46Sale(fixture, {
+      product_id: fixture.productId,
+      batch_id: null,
+      quantity: 1.5,
+      expected_unit_price: 1250.5,
+      payment_method: "cash",
+      cash_received: 2000,
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.sale).toMatchObject({
+      product_id: fixture.productId,
+      batch_id: null,
+      quantity: 1.5,
+      total_price: 1875.75,
+    });
+    expect(response.body.data.receipt).toMatchObject({
+      species_name: product.name,
+      fish_size: product.sku,
+      quantity: 1.5,
+      unit: "SAK",
+      unit_price: 1250.5,
+      total_payment: 1875.75,
+    });
+    expect(Object.keys(response.body.data.receipt)).toEqual([
+      "company_name",
+      "transaction_date_time",
+      "species_name",
+      "fish_size",
+      "quantity",
+      "unit",
+      "unit_price",
+      "total_payment",
+      "payment_method",
+      "cashier_name",
+    ]);
+
+    const saleId = response.body.data.sale.id as string;
+    const reprint = await getReceipt(fixture, saleId);
+    expect(reprint.status).toBe(200);
+    expect(reprint.body.data).toEqual(response.body.data.receipt);
+    const storedSale = await admin.fishSale.findUniqueOrThrow({
+      where: { id: saleId },
+    });
+    const afterSale = await admin.product.findUniqueOrThrow({
+      where: { id: fixture.productId },
+      select: { stockQuantity: true },
+    });
+    expect(storedSale.quantity.toNumber()).toBe(1.5);
+    expect(afterSale.stockQuantity?.toNumber()).toBe(8.5);
+  });
+
+  it("rejects fractional quantity for BATCH_TRACKED sales", async () => {
+    const fixture = await createFixture("Kasir");
+    const response = await postV46Sale(
+      fixture,
+      cashPayload(fixture.batchId, {
+        quantity: 1.5,
+        cash_received: 5000,
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe("INVALID_PAYLOAD");
+  });
+
+  it("denies Kepala Budidaya from the sellable POS catalog", async () => {
+    for (const role of POS_ROLES) {
+      const fixture = await createNonBatchFixture(role);
+      expect((await getSellableCatalog(fixture)).status).toBe(200);
+    }
+
+    const kepala = await createNonBatchFixture("Kepala Budidaya");
+    const denied = await getSellableCatalog(kepala);
+    expect(denied.status).toBe(403);
+    expect(denied.body.error.code).toBe("FORBIDDEN");
+  });
+
+  it("requires integer prices for BATCH_TRACKED products on create and update", async () => {
+    const owner = await createFixture("Owner");
+    if (!owner.productId) throw new Error("Fixture has no batch product");
+
+    const update = await patchProduct(owner, owner.productId, {
+      unit_price: 2500.5,
+    });
+    expect(update.status).toBe(422);
+    expect(update.body.error.code).toBe("PRICE_OUT_OF_RANGE");
+
+    const category = await admin.productCategory.findUniqueOrThrow({
+      where: { code: "BENIH-IKAN" },
+      select: { id: true },
+    });
+    const create = await postProduct(owner, {
+      category_id: category.id,
+      sku: `FRACTIONAL-${randomUUID()}`,
+      name: `${owner.speciesName} fractional price`,
+      tracking_mode: "BATCH_TRACKED",
+      species: owner.speciesName,
+      size_label: "4-6 cm",
+      unit: "EKOR",
+      unit_price: 2500.5,
+      stock_quantity: null,
+    });
+    expect(create.status).toBe(400);
   });
 
   it("limits catalog management to Owner/Admin and archives without deleting", async () => {
@@ -1450,6 +1567,7 @@ databaseSuite("POS create-sale HTTP integration", () => {
       "species_name",
       "fish_size",
       "quantity",
+      "unit",
       "unit_price",
       "total_payment",
       "payment_method",
@@ -1460,6 +1578,7 @@ databaseSuite("POS create-sale HTTP integration", () => {
       species_name: creator.speciesName,
       fish_size: "3-5 cm",
       quantity: 5,
+      unit: "EKOR",
       unit_price: 2500,
       total_payment: 12500,
       payment_method: "cash",

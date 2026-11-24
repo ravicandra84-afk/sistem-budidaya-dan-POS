@@ -1157,13 +1157,15 @@ Gate dinyatakan lulus hanya jika:
 
 **Status:** `DONE` — 2026-11-24. Migrasi berhasil diterapkan ke `pfi_db` dan `pfi_test`; Prisma Client berhasil di-generate dan `prisma migrate status` menyatakan skema up to date. Trigger V4.5 `batches_status_transition_guard` dan `fish_sales_immutable` terverifikasi ada serta enabled di kedua database. Kolom `audit_logs.old_values/new_values` dipertahankan nullable demi kompatibilitas layanan V4.5; detail kesiapan jual batch disimpan di `batch_sale_readiness_histories`.
 
-### P8-FIX-03 — Backend API & Serializer (**ACTIVE**)
+### P8-FIX-03 — Backend API & Serializer (**DONE**)
 
 **Dependency:** P8-FIX-02 selesai.
 
 **Scope:** batasi RBAC `GET /pos/catalog` ke `Owner`, `Admin Operasional`, dan `Kasir`; validasi kuantitas/harga berdasarkan mode; samakan serializer sembilan slot untuk response penjualan baru dan cetak ulang.
 
-### P8-FIX-04 — Frontend UI (**NOT STARTED**)
+**Status:** `DONE` — 2026-11-24. RBAC katalog dibatasi ke `Owner`, `Admin Operasional`, dan `Kasir`; validasi harga/kuantitas mengikuti `tracking_mode`; response POST dan cetak ulang memakai serializer struk yang identik. Migrasi additive `20261124130000_fix_fish_sales_total_price_decimal_check` diterapkan ke `pfi_db` dan `pfi_test`; E2E POS 38/38 lulus. Typecheck dan build API lulus. Trigger V4.5 tetap terpasang dan enabled di kedua database.
+
+### P8-FIX-04 — Frontend UI (**ACTIVE**)
 
 **Dependency:** P8-FIX-03 selesai.
 

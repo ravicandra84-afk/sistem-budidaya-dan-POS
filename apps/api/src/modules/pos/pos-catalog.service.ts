@@ -132,7 +132,7 @@ export class PosCatalogService {
     idempotencyKey: string | undefined,
     request: RequestWithId,
   ) {
-    this.assertPriceInRange(input.price_per_fish);
+    this.assertPriceInRange(input.price_per_fish, "BATCH_TRACKED");
     const species = await this.prisma.fishSpecies.findUnique({
       where: { id: input.species_id },
       select: {
@@ -223,7 +223,7 @@ export class PosCatalogService {
     idempotencyKey: string | undefined,
     request: RequestWithId,
   ) {
-    this.assertPriceInRange(input.price_per_fish);
+    this.assertPriceInRange(input.price_per_fish, "BATCH_TRACKED");
     const endpoint = `/api/v1/pos/prices/${priceId}`;
     return this.mutate(
       actor,
@@ -459,7 +459,7 @@ export class PosCatalogService {
     idempotencyKey: string | undefined,
     request: RequestWithId,
   ) {
-    this.assertPriceInRange(input.unit_price);
+    this.assertPriceInRange(input.unit_price, input.tracking_mode);
     return this.mutate(
       actor,
       idempotencyKey,
@@ -556,7 +556,7 @@ export class PosCatalogService {
           );
         }
         const merged = this.mergeProduct(current, input);
-        this.assertPriceInRange(merged.unit_price);
+        this.assertPriceInRange(merged.unit_price, merged.tracking_mode);
         this.assertProductMode(merged, category.requiresBatch);
         const updated = await transaction.product.update({
           where: { id: productId },
@@ -879,17 +879,23 @@ export class PosCatalogService {
     }
   }
 
-  private assertPriceInRange(price: number): void {
+  private assertPriceInRange(
+    price: number,
+    trackingMode: "BATCH_TRACKED" | "NON_BATCH",
+  ): void {
     if (
       !Number.isFinite(price) ||
       price <= 0 ||
       price > 10_000_000 ||
-      Math.abs(price * 100 - Math.round(price * 100)) >= 1e-8
+      Math.abs(price * 100 - Math.round(price * 100)) >= 1e-8 ||
+      (trackingMode === "BATCH_TRACKED" && !Number.isInteger(price))
     ) {
       throw new ApiException(
         HttpStatus.UNPROCESSABLE_ENTITY,
         "PRICE_OUT_OF_RANGE",
-        "Harga harus lebih dari Rp0,00 dan paling banyak Rp10.000.000,00 dengan maksimal dua desimal.",
+        trackingMode === "BATCH_TRACKED"
+          ? "Harga BATCH_TRACKED harus bilangan bulat lebih dari Rp0 dan paling banyak Rp10.000.000."
+          : "Harga NON_BATCH harus lebih dari Rp0,00 dan paling banyak Rp10.000.000,00 dengan maksimal dua desimal.",
       );
     }
   }

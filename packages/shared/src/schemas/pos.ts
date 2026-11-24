@@ -15,6 +15,13 @@ const money2 = (minimum: number, maximum: number) =>
     .max(maximum)
     .refine((value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-8);
 
+const quantity2 = z
+  .number()
+  .finite()
+  .positive()
+  .max(1_000_000)
+  .refine((value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-8);
+
 function normalizeAliases(
   value: unknown,
   aliases: Record<string, string>,
@@ -36,7 +43,7 @@ function normalizeAliases(
 const saleBase = {
   batch_id: z.uuid().nullable().optional(),
   product_id: z.uuid().optional(),
-  quantity: z.number().int().min(1).max(1_000_000),
+  quantity: quantity2,
   expected_unit_price: money2(0.01, 10_000_000),
 };
 
@@ -190,9 +197,23 @@ const productFields = {
   is_active: z.boolean().optional(),
 };
 
+const hasValidProductPriceForMode = (product: {
+  tracking_mode?: "BATCH_TRACKED" | "NON_BATCH" | undefined;
+  unit_price?: number | undefined;
+}) =>
+  product.tracking_mode !== "BATCH_TRACKED" ||
+  product.unit_price === undefined ||
+  Number.isInteger(product.unit_price);
+
 export const createProductSchema = z.preprocess(
   (value) => normalizeAliases(value, productAliases),
-  z.object(productFields).strict(),
+  z
+    .object(productFields)
+    .strict()
+    .refine(hasValidProductPriceForMode, {
+      message: "Harga BATCH_TRACKED harus berupa bilangan bulat Rupiah.",
+      path: ["unit_price"],
+    }),
 );
 export type CreateProductInput = z.infer<typeof createProductSchema>;
 
@@ -212,7 +233,11 @@ export const updateProductSchema = z.preprocess(
       is_active: productFields.is_active,
     })
     .strict()
-    .refine((input) => Object.keys(input).length > 0),
+    .refine((input) => Object.keys(input).length > 0)
+    .refine(hasValidProductPriceForMode, {
+      message: "Harga BATCH_TRACKED harus berupa bilangan bulat Rupiah.",
+      path: ["unit_price"],
+    }),
 );
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;
 
