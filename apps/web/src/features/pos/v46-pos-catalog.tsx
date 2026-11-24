@@ -45,6 +45,12 @@ interface CatalogProduct {
   batches: CatalogBatch[];
 }
 
+function formatQuantity(value: number): string {
+  return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(
+    value,
+  );
+}
+
 export function V46PosCatalog() {
   const { ready, session } = useAuth();
   const [products, setProducts] = useState<CatalogProduct[]>([]);
@@ -155,10 +161,18 @@ export function V46PosCatalog() {
       ? (selectedBatch?.current_stock ?? 0)
       : (selectedProduct?.stock_quantity ?? 0);
   const quantityNumber = Number(quantity);
+  const quantityHasTwoDecimals =
+    Math.abs(quantityNumber * 100 - Math.round(quantityNumber * 100)) < 1e-8;
   const quantityValid =
-    Number.isInteger(quantityNumber) &&
-    quantityNumber >= 1 &&
-    quantityNumber <= availableStock;
+    selectedProduct?.tracking_mode === "BATCH_TRACKED"
+      ? Number.isInteger(quantityNumber) &&
+        quantityNumber >= 1 &&
+        quantityNumber <= availableStock
+      : selectedProduct?.tracking_mode === "NON_BATCH" &&
+        Number.isFinite(quantityNumber) &&
+        quantityNumber > 0 &&
+        quantityHasTwoDecimals &&
+        quantityNumber <= availableStock;
   const total =
     selectedProduct && quantityValid
       ? Number((quantityNumber * selectedProduct.unit_price).toFixed(2))
@@ -336,7 +350,9 @@ export function V46PosCatalog() {
                       {formatPosRupiah(product.unit_price)}
                     </span>
                     <span className="text-sm font-bold tabular-nums">
-                      {formatInteger(product.stock_quantity)} {product.unit}
+                      {product.tracking_mode === "BATCH_TRACKED"
+                        ? formatInteger(product.stock_quantity)
+                        : formatQuantity(product.stock_quantity)} {product.unit}
                     </span>
                   </div>
                 </button>
@@ -395,7 +411,9 @@ export function V46PosCatalog() {
                     <div>
                       <p className="text-xs text-slate-500">Stok tersedia</p>
                       <p className="mt-1 font-bold tabular-nums text-marine">
-                        {formatInteger(availableStock)} {selectedProduct.unit}
+                        {selectedProduct.tracking_mode === "BATCH_TRACKED"
+                          ? formatInteger(availableStock)
+                          : formatQuantity(availableStock)} {selectedProduct.unit}
                       </p>
                     </div>
                     <div>
@@ -417,9 +435,9 @@ export function V46PosCatalog() {
                     <Input
                       id="pos-quantity"
                       type="number"
-                      min={1}
+                      min={selectedProduct.tracking_mode === "BATCH_TRACKED" ? 1 : 0.01}
                       max={availableStock || undefined}
-                      step={1}
+                      step={selectedProduct.tracking_mode === "BATCH_TRACKED" ? 1 : "0.01"}
                       value={quantity}
                       onChange={(event) => setQuantity(event.target.value)}
                     />

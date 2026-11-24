@@ -265,6 +265,54 @@ export default function BatchDetailPage() {
         </DetailValue>
       </section>
 
+      {canChangeReadiness ? (
+        <section className="mt-6 border-y border-border bg-white px-4 py-4 sm:px-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-base font-bold text-marine">
+                Kontrol Kesiapan Jual POS
+              </h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Atur apakah batch aktif ini dapat dipilih untuk penjualan.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <SaleReadinessBadge value={detail.batch.sale_readiness} />
+              <Button
+                type="button"
+                className="min-h-11"
+                disabled={readinessSaving}
+                onClick={() => void submitReadiness()}
+              >
+                {readinessSaving ? (
+                  <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <CheckCircle2 className="size-4" aria-hidden="true" />
+                )}
+                {detail.batch.sale_readiness === "BELUM_SIAP"
+                  ? "Tandai SIAP_JUAL"
+                  : "Tarik ke BELUM_SIAP"}
+              </Button>
+            </div>
+          </div>
+          <div className="mt-4 max-w-2xl">
+            <Field id="readiness-note" label="Catatan perubahan (opsional)">
+              <Textarea
+                id="readiness-note"
+                value={readinessNote}
+                onChange={(event) => setReadinessNote(event.target.value)}
+                maxLength={1000}
+              />
+            </Field>
+          </div>
+          {readinessError ? (
+            <p className="mt-3 text-sm text-danger" role="alert">
+              {readinessError}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
       {!incoming ? (
         <section className="mt-6 border-y border-border bg-white">
           <EmptyState
@@ -333,27 +381,53 @@ export default function BatchDetailPage() {
         </section>
       )}
 
-      {detail.sale_readiness_histories?.length ? (
-        <section className="mt-6 border-y border-border bg-white px-4 py-4">
-          <h2 className="text-sm font-bold text-marine">
-            Riwayat kesiapan jual
+      <section className="mt-6 border-y border-border bg-white">
+        <div className="border-b border-border px-4 py-3">
+          <h2 className="text-base font-bold text-marine">
+            Riwayat Perubahan Kesiapan Jual
           </h2>
-          <div className="mt-3 divide-y divide-border">
-            {detail.sale_readiness_histories.slice(0, 5).map((history) => (
-              <div key={history.id} className="py-2 text-sm text-slate-700">
-                <span className="font-semibold">
-                  {history.from_readiness ?? "Belum ada"} →{" "}
-                  {history.to_readiness}
-                </span>
-                {history.note ? <span> · {history.note}</span> : null}
-                <span className="ml-2 text-xs text-slate-500">
-                  {history.changed_by.name}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-left text-sm">
+            <thead className="bg-[#edf2f6] text-xs font-bold uppercase text-slate-600">
+              <tr>
+                <th scope="col" className="px-4 py-3">Waktu</th>
+                <th scope="col" className="px-4 py-3">Dari Status</th>
+                <th scope="col" className="px-4 py-3">Ke Status</th>
+                <th scope="col" className="px-4 py-3">Diubah Oleh</th>
+                <th scope="col" className="px-4 py-3">Catatan</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {detail.sale_readiness_histories.length > 0 ? (
+                detail.sale_readiness_histories.map((history) => (
+                  <tr key={history.id}>
+                    <td className="whitespace-nowrap px-4 py-3 tabular-nums">
+                      {formatBusinessDateTime(history.created_at)}
+                    </td>
+                    <td className="px-4 py-3">
+                      {history.from_readiness ?? "Belum ada"}
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-marine">
+                      {history.to_readiness}
+                    </td>
+                    <td className="px-4 py-3">{history.changed_by.name}</td>
+                    <td className="max-w-sm whitespace-pre-wrap px-4 py-3 text-slate-600">
+                      {history.note || "—"}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-500">
+                    Belum ada perubahan kesiapan jual.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       <dialog
         ref={dialogRef}

@@ -1165,13 +1165,15 @@ Gate dinyatakan lulus hanya jika:
 
 **Status:** `DONE` — 2026-11-24. RBAC katalog dibatasi ke `Owner`, `Admin Operasional`, dan `Kasir`; validasi harga/kuantitas mengikuti `tracking_mode`; response POST dan cetak ulang memakai serializer struk yang identik. Migrasi additive `20261124130000_fix_fish_sales_total_price_decimal_check` diterapkan ke `pfi_db` dan `pfi_test`; E2E POS 38/38 lulus. Typecheck dan build API lulus. Trigger V4.5 tetap terpasang dan enabled di kedua database.
 
-### P8-FIX-04 — Frontend UI (**ACTIVE**)
+### P8-FIX-04 — Frontend UI (**DONE**)
 
 **Dependency:** P8-FIX-03 selesai.
 
 **Scope:** render panel `BELUM_SIAP` <-> `SIAP_JUAL`, catatan, dan tabel riwayat di `/batches/[id]`; sediakan UI CRUD kategori di `/pos/prices`; dukung kuantitas desimal `NON_BATCH` di `/pos`.
 
-### P8-FIX-05 — Migrasi E2E Playwright (**NOT STARTED**)
+**Status:** `DONE` — 2026-11-24. Panel kontrol kesiapan jual dan tabel histori lengkap tersedia; manajemen kategori mendukung tambah, ubah, dan arsip/aktifkan; kasir menerima quantity `NON_BATCH` hingga dua desimal dan receipt menampilkan quantity bersama unit. Typecheck web lulus; build web lulus dengan `NODE_ENV=production`.
+
+### P8-FIX-05 — Migrasi E2E Playwright (**ACTIVE**)
 
 **Dependency:** P8-FIX-04 selesai.
 

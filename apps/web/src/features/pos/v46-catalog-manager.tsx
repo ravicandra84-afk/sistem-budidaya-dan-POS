@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Archive, Plus, RefreshCw, Search } from "lucide-react";
+import { Archive, Pencil, Plus, RefreshCw, Search } from "lucide-react";
 import { useAuth } from "@/features/auth/auth-provider";
 import { ApiClientError, apiRequest } from "@/lib/api";
 import { generateUuidV4 } from "@/lib/uuid";
@@ -62,6 +62,12 @@ const emptyForm = {
   stock_quantity: "",
 };
 
+const emptyCategoryForm = {
+  name: "",
+  code: "",
+  requires_batch: false,
+};
+
 export function V46CatalogManager() {
   const { session } = useAuth();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -75,6 +81,11 @@ export function V46CatalogManager() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState("");
+  const [categoryEditorOpen, setCategoryEditorOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [categoryForm, setCategoryForm] = useState(emptyCategoryForm);
+  const [categorySaving, setCategorySaving] = useState(false);
+  const [categoryError, setCategoryError] = useState("");
 
   const canManage =
     session?.user.role === "Owner" ||
@@ -114,9 +125,100 @@ export function V46CatalogManager() {
     };
   }, [reload, session]);
 
+  function openCreateCategory() {
+    setEditingCategory(null);
+    setCategoryForm(emptyCategoryForm);
+    setCategoryEditorOpen(true);
+    setCategoryError("");
+  }
+
+  function openEditCategory(category: Category) {
+    setEditingCategory(category);
+    setCategoryForm({
+      name: category.name,
+      code: category.code,
+      requires_batch: category.requires_batch,
+    });
+    setCategoryEditorOpen(true);
+    setCategoryError("");
+  }
+
+  async function saveCategory() {
+    if (!session || !canManage || categorySaving) return;
+    const name = categoryForm.name.trim();
+    const code = categoryForm.code.trim().toUpperCase();
+    if (!name || !/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/.test(code)) {
+      setCategoryError("Nama wajib diisi dan kode harus berformat HURUF-ANGKA.");
+      return;
+    }
+
+    setCategorySaving(true);
+    setCategoryError("");
+    try {
+      await apiRequest(
+        editingCategory
+          ? `/pos/categories/${editingCategory.id}`
+          : "/pos/categories",
+        {
+          method: editingCategory ? "PATCH" : "POST",
+          token: session.accessToken,
+          headers: { "Idempotency-Key": generateUuidV4() },
+          body: JSON.stringify({
+            name,
+            code,
+            requires_batch: categoryForm.requires_batch,
+          }),
+        },
+      );
+      setCategoryEditorOpen(false);
+      setEditingCategory(null);
+      setCategoryForm(emptyCategoryForm);
+      setReload((value) => value + 1);
+    } catch (caught) {
+      setCategoryError(
+        caught instanceof ApiClientError
+          ? caught.message
+          : "Kategori belum dapat disimpan.",
+      );
+    } finally {
+      setCategorySaving(false);
+    }
+  }
+
+  async function toggleCategoryActive(category: Category) {
+    if (!session || !canManage || categorySaving) return;
+    const nextActive = !category.is_active;
+    const action = nextActive ? "aktifkan" : "arsipkan";
+    if (!window.confirm(`${action[0]?.toUpperCase()}${action.slice(1)} kategori ${category.name}?`)) {
+      return;
+    }
+    setCategorySaving(true);
+    setCategoryError("");
+    try {
+      await apiRequest(`/pos/categories/${category.id}`, {
+        method: "PATCH",
+        token: session.accessToken,
+        headers: { "Idempotency-Key": generateUuidV4() },
+        body: JSON.stringify({ is_active: nextActive }),
+      });
+      setReload((value) => value + 1);
+    } catch (caught) {
+      setCategoryError(
+        caught instanceof ApiClientError
+          ? caught.message
+          : "Status kategori belum dapat diperbarui.",
+      );
+    } finally {
+      setCategorySaving(false);
+    }
+  }
+
   function openCreate() {
     setEditing(null);
-    setForm({ ...emptyForm, category_id: categories[0]?.id ?? "" });
+    setForm({
+      ...emptyForm,
+      category_id: categories.find((category) => category.is_active)?.id ?? "",
+    });
     setActionError("");
   }
 
@@ -143,9 +245,16 @@ export function V46CatalogManager() {
     if (
       !Number.isFinite(unitPrice) ||
       unitPrice <= 0 ||
-      unitPrice > 10_000_000
+      unitPrice > 10_000_000 ||
+      Math.abs(unitPrice * 100 - Math.round(unitPrice * 100)) >= 1e-8 ||
+      (form.tracking_mode === "BATCH_TRACKED" &&
+        !Number.isInteger(unitPrice))
     ) {
-      setActionError("Harga satuan harus antara Rp0,01 dan Rp10.000.000,00.");
+      setActionError(
+        form.tracking_mode === "BATCH_TRACKED"
+          ? "Harga produk batch harus bilangan bulat antara Rp1 dan Rp10.000.000."
+          : "Harga produk umum harus antara Rp0,01 dan Rp10.000.000,00 dengan maksimal dua desimal.",
+      );
       return;
     }
     if (
@@ -275,7 +384,7 @@ export function V46CatalogManager() {
             onChange={(event) => setCategoryFilter(event.target.value)}
           >
             <option value="">Semua kategori</option>
-            {categories.map((category) => (
+            {categories.filter((category) => category.is_active).map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
               </option>
@@ -291,6 +400,153 @@ export function V46CatalogManager() {
           Muat ulang
         </Button>
       </section>
+
+      {canManage ? (
+        <section className="mb-6 border-y border-border bg-white">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+            <h2 className="font-bold text-marine">Kategori produk</h2>
+            <Button
+              type="button"
+              variant="secondary"
+              className="min-h-11"
+              onClick={openCreateCategory}
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              Tambah kategori
+            </Button>
+          </div>
+          {categoryEditorOpen ? (
+            <div className="border-b border-border bg-[#f7f9fb] px-4 py-4">
+              <h3 className="font-semibold text-marine">
+                {editingCategory ? "Ubah kategori" : "Kategori baru"}
+              </h3>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <Field id="category-name" label="Nama kategori" required>
+                  <Input
+                    id="category-name"
+                    value={categoryForm.name}
+                    onChange={(event) =>
+                      setCategoryForm((value) => ({
+                        ...value,
+                        name: event.target.value,
+                      }))
+                    }
+                  />
+                </Field>
+                <Field id="category-code" label="Kode" required>
+                  <Input
+                    id="category-code"
+                    value={categoryForm.code}
+                    onChange={(event) =>
+                      setCategoryForm((value) => ({
+                        ...value,
+                        code: event.target.value.toUpperCase(),
+                      }))
+                    }
+                  />
+                </Field>
+                <label className="flex min-h-11 items-center gap-2 text-sm text-marine sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={categoryForm.requires_batch}
+                    onChange={(event) =>
+                      setCategoryForm((value) => ({
+                        ...value,
+                        requires_batch: event.target.checked,
+                      }))
+                    }
+                  />
+                  Kategori memerlukan pelacakan batch
+                </label>
+              </div>
+              {categoryError ? (
+                <p className="mt-3 text-sm text-danger" role="alert">
+                  {categoryError}
+                </p>
+              ) : null}
+              <div className="mt-4 flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={categorySaving}
+                  onClick={() => {
+                    setCategoryEditorOpen(false);
+                    setEditingCategory(null);
+                    setCategoryError("");
+                  }}
+                >
+                  Batal
+                </Button>
+                <Button
+                  type="button"
+                  className="min-h-11"
+                  disabled={categorySaving}
+                  onClick={() => void saveCategory()}
+                >
+                  {categorySaving ? "Menyimpan…" : "Simpan kategori"}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          {categoryError && !categoryEditorOpen ? (
+            <p className="border-b border-border px-4 py-3 text-sm text-danger" role="alert">
+              {categoryError}
+            </p>
+          ) : null}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left text-sm">
+              <thead className="bg-[#edf2f6] text-xs font-bold uppercase text-slate-600">
+                <tr>
+                  <th scope="col" className="px-4 py-3">Kategori</th>
+                  <th scope="col" className="px-4 py-3">Kode</th>
+                  <th scope="col" className="px-4 py-3">Pelacakan</th>
+                  <th scope="col" className="px-4 py-3">Status</th>
+                  <th scope="col" className="px-4 py-3 text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {categories.map((category) => (
+                  <tr key={category.id}>
+                    <td className="px-4 py-3 font-semibold text-marine">{category.name}</td>
+                    <td className="px-4 py-3 font-mono text-xs">{category.code}</td>
+                    <td className="px-4 py-3">{category.requires_batch ? "Batch" : "Non-batch"}</td>
+                    <td className="px-4 py-3">{category.is_active ? "Aktif" : "Diarsipkan"}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={categorySaving}
+                          onClick={() => openEditCategory(category)}
+                        >
+                          <Pencil className="size-4" aria-hidden="true" />
+                          Ubah
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={category.is_active ? "danger" : "secondary"}
+                          disabled={categorySaving}
+                          onClick={() => void toggleCategoryActive(category)}
+                        >
+                          <Archive className="size-4" aria-hidden="true" />
+                          {category.is_active ? "Arsip" : "Aktifkan"}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {!loading && categories.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
+                      Belum ada kategori produk.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
 
       {loading ? <TableSkeleton /> : null}
       {!loading && error ? (
@@ -398,7 +654,7 @@ export function V46CatalogManager() {
                     }))
                   }
                 >
-                  {categories.map((category) => (
+                  {categories.filter((category) => category.is_active).map((category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}
                     </option>
@@ -499,9 +755,9 @@ export function V46CatalogManager() {
                 <Input
                   id="product-price"
                   type="number"
-                  min="0.01"
+                  min={form.tracking_mode === "BATCH_TRACKED" ? 1 : 0.01}
                   max="10000000"
-                  step="0.01"
+                  step={form.tracking_mode === "BATCH_TRACKED" ? 1 : "0.01"}
                   value={form.unit_price}
                   onChange={(event) =>
                     setForm((value) => ({

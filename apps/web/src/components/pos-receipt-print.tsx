@@ -4,7 +4,7 @@ import { Bluetooth, Printer, Usb } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { buildEscPosReceiptBytes } from "@/lib/escpos-receipt";
-import { formatInteger, formatPosRupiah } from "@/lib/format";
+import { formatPosRupiah } from "@/lib/format";
 import {
   isWebBluetoothSupported,
   printViaWebBluetooth,
@@ -16,6 +16,7 @@ export interface PosReceiptData {
   species_name: string;
   fish_size: string | null;
   quantity: number;
+  unit?: string;
   unit_price: number;
   total_payment: number;
   payment_method: "cash" | "transfer";
@@ -258,15 +259,15 @@ export function PosReceiptPrint({
           label="Waktu transaksi (WIB)"
           value={receipt.transaction_date_time}
         />
-        <ReceiptLine label="Spesies" value={receipt.species_name} />
-        <ReceiptLine label="Ukuran ikan" value={receipt.fish_size ?? "—"} />
+        <ReceiptLine label="Spesies / produk" value={receipt.species_name} />
+        <ReceiptLine label="Ukuran / SKU" value={receipt.fish_size ?? "—"} />
         <ReceiptLine
           label="Jumlah"
-          value={`${formatInteger(receipt.quantity)} ekor`}
+          value={`${formatReceiptQuantity(receipt.quantity)} ${receipt.unit || "ekor"}`}
           numeric
         />
         <ReceiptLine
-          label="Harga per ekor"
+          label="Harga satuan"
           value={formatPosRupiah(receipt.unit_price)}
           numeric
         />
@@ -296,6 +297,12 @@ function requestBrowserPrint(): boolean {
   } catch {
     return false;
   }
+}
+
+function formatReceiptQuantity(quantity: number): string {
+  return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(
+    quantity,
+  );
 }
 
 function getSerialApi(): SerialApi | undefined {
