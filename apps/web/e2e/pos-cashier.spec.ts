@@ -39,6 +39,59 @@ function successEnvelope(data: unknown) {
 
 async function openPos(page: Page, role: TestRole) {
   let batchListRequests = 0;
+  await page.route("**/api/v1/pos/catalog", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(
+        successEnvelope({
+          items: [
+            {
+              id: "catalog-v46-001",
+              sku: "BATCH-20261120-001",
+              name: "Ikan Nila 3-5 cm",
+              tracking_mode: "BATCH_TRACKED",
+              species: "Ikan Nila",
+              size_label: "3-5 cm",
+              unit: "EKOR",
+              unit_price: 2500,
+              stock_quantity: 12,
+              batches: [
+                {
+                  id: availableBatchId,
+                  batch_code: "BATCH-20261120-001",
+                  current_stock: 12,
+                  species_name: "Ikan Nila",
+                  size_label: "3-5 cm",
+                },
+              ],
+            },
+            {
+              id: "catalog-v46-002",
+              sku: "BATCH-20261120-002",
+              name: "Ikan Nila 3-5 cm",
+              tracking_mode: "BATCH_TRACKED",
+              species: "Ikan Nila",
+              size_label: "3-5 cm",
+              unit: "EKOR",
+              unit_price: 0,
+              stock_quantity: 8,
+              batches: [
+                {
+                  id: missingPriceBatchId,
+                  batch_code: "BATCH-20261120-002",
+                  current_stock: 8,
+                  species_name: "Ikan Nila",
+                  size_label: "3-5 cm",
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    });
+  });
+
   await page.route("**/api/v1/pos/batches**", async (route) => {
     const { pathname } = new URL(route.request().url());
     if (pathname === "/api/v1/pos/batches") {

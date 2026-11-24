@@ -1,100 +1,137 @@
 "use client";
 
-import { CalendarDays, Plus, RotateCcw } from "lucide-react";
-import Link from "next/link";
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Plus, RefreshCw } from "lucide-react";
 import { batchListQuerySchema } from "@pfi/shared";
 import { Button, ButtonLink } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/badge";
 import {
   EmptyState,
   ErrorState,
   TableSkeleton,
 } from "@/components/ui/data-states";
-import { Field, Input, Select } from "@/components/ui/field";
+import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { PageHeader } from "@/components/page-header";
 import { PaginationControls } from "@/components/pagination-controls";
+import { StatusBadge } from "@/components/ui/badge";
 import { useAuth } from "@/features/auth/auth-provider";
 import type { BatchItem, PaginationData } from "@/features/receiving/types";
-import {
-  formatBusinessDate,
-  formatInteger,
-  formatRupiah,
-  inputDateRange,
-} from "@/lib/format";
+import { SaleReadinessBadge } from "@/features/pos/v46-batch-readiness";
 import { ApiClientError, apiRequest } from "@/lib/api";
-
-function errorMessage(error: unknown): string {
-  return error instanceof ApiClientError
-    ? error.message
-    : "Data batch tidak dapat dimuat. Coba kembali.";
-}
+import { formatBusinessDate, formatInteger, formatRupiah } from "@/lib/format";
+import { generateUuidV4 } from "@/lib/uuid";
 
 export default function BatchesPage() {
   const { session } = useAuth();
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
   const [status, setStatus] = useState("");
   const [result, setResult] = useState<PaginationData<BatchItem> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [reloadKey, setReloadKey] = useState(0);
+  const [reload, setReload] = useState(0);
+  const [selected, setSelected] = useState<BatchItem | null>(null);
+  const [nextReadiness, setNextReadiness] = useState<
+    "BELUM_SIAP" | "SIAP_JUAL"
+  >("SIAP_JUAL");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [actionError, setActionError] = useState("");
+  const canCreate =
+    session?.user.role === "Owner" ||
+    session?.user.role === "Admin Operasional" ||
+    session?.user.role === "Kepala Budidaya";
+  const canManageReadiness =
+    session?.user.role === "Owner" || session?.user.role === "Kepala Budidaya";
 
   useEffect(() => {
     if (!session) return;
     let active = true;
     setLoading(true);
     setError("");
-
-    const rawQuery = {
+    const raw = batchListQuerySchema.safeParse({
       page: String(page),
       limit: String(limit),
-      ...(startDate ? { startDate: inputDateRange(startDate) } : {}),
-      ...(endDate ? { endDate: inputDateRange(endDate, true) } : {}),
       ...(status ? { status } : {}),
-    };
-    const parsedQuery = batchListQuerySchema.safeParse(rawQuery);
-    if (!parsedQuery.success) {
+    });
+    if (!raw.success) {
       setLoading(false);
-      setError(
-        "Rentang tanggal tidak valid. Periksa kembali tanggal awal dan akhir.",
-      );
+      setError("Filter batch tidak valid.");
       return () => {
         active = false;
       };
     }
-
-    const params = new URLSearchParams(rawQuery);
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+      ...(status ? { status } : {}),
+    });
     apiRequest<PaginationData<BatchItem>>(`/batches?${params.toString()}`, {
       token: session.accessToken,
     })
       .then((response) => {
         if (active) setResult(response.data);
       })
-      .catch((caught: unknown) => {
-        if (active) setError(errorMessage(caught));
+      .catch((caught) => {
+        if (active)
+          setError(
+            caught instanceof ApiClientError
+              ? caught.message
+              : "Data batch tidak dapat dimuat.",
+          );
       })
       .finally(() => {
         if (active) setLoading(false);
       });
-
     return () => {
       active = false;
     };
-  }, [session, page, limit, startDate, endDate, status, reloadKey]);
+  }, [limit, page, reload, session, status]);
 
-  const canCreate =
-    session?.user.role === "Owner" ||
-    session?.user.role === "Admin Operasional" ||
-    session?.user.role === "Kepala Budidaya";
+  async function openReadiness(batch: BatchItem) {
+    if (!session) return;
+    setActionError("");
+    setNote("");
+    const detail = await apiRequest<BatchItem>(
+      `/batches/${encodeURIComponent(batch.batch.id)}`,
+      { token: session.accessToken },
+    ).catch(() => null);
+    const latest = detail?.data ?? batch;
+    setSelected(latest);
+    setNextReadiness(
+      latest.batch.sale_readiness === "SIAP_JUAL" ? "BELUM_SIAP" : "SIAP_JUAL",
+    );
+  }
 
-  function resetFilters() {
-    setStartDate("");
-    setEndDate("");
-    setStatus("");
-    setPage(1);
+  async function saveReadiness() {
+    if (!session || !selected || saving) return;
+    setSaving(true);
+    setActionError("");
+    try {
+      await apiRequest(
+        `/batches/${encodeURIComponent(selected.batch.id)}/sale-readiness`,
+        {
+          method: "PATCH",
+          token: session.accessToken,
+          headers: { "Idempotency-Key": generateUuidV4() },
+          body: JSON.stringify({
+            saleReadiness: nextReadiness,
+            note: note.trim() || undefined,
+          }),
+        },
+      );
+      setSelected(null);
+      setNote("");
+      setReload((value) => value + 1);
+    } catch (caught) {
+      setActionError(
+        caught instanceof ApiClientError
+          ? caught.message
+          : "Kesiapan jual belum dapat diperbarui.",
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -102,7 +139,7 @@ export default function BatchesPage() {
       <PageHeader
         eyebrow="Penerimaan · Batch"
         title="Daftar batch"
-        description="Telusuri penerimaan ikan, ukuran, jumlah awal, dan status batch."
+        description="Telusuri penerimaan ikan, stok, status batch, dan kesiapan jual."
         action={
           canCreate ? (
             <ButtonLink href="/batches/new">
@@ -112,44 +149,7 @@ export default function BatchesPage() {
           ) : null
         }
       />
-
-      <section className="mb-5 grid gap-3 border-b border-border pb-5 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_190px_auto] xl:items-end">
-        <Field id="batch-start-date" label="Dari tanggal">
-          <div className="relative">
-            <CalendarDays
-              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400"
-              aria-hidden="true"
-            />
-            <Input
-              id="batch-start-date"
-              className="pl-9 tabular-nums"
-              type="date"
-              value={startDate}
-              onChange={(event) => {
-                setStartDate(event.target.value);
-                setPage(1);
-              }}
-            />
-          </div>
-        </Field>
-        <Field id="batch-end-date" label="Sampai tanggal">
-          <div className="relative">
-            <CalendarDays
-              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400"
-              aria-hidden="true"
-            />
-            <Input
-              id="batch-end-date"
-              className="pl-9 tabular-nums"
-              type="date"
-              value={endDate}
-              onChange={(event) => {
-                setEndDate(event.target.value);
-                setPage(1);
-              }}
-            />
-          </div>
-        </Field>
+      <section className="mb-5 flex flex-wrap items-end gap-3 border-b border-border pb-5">
         <Field id="batch-status" label="Status batch">
           <Select
             id="batch-status"
@@ -166,70 +166,51 @@ export default function BatchesPage() {
           </Select>
         </Field>
         <Button
-          className="w-full sm:w-fit"
           variant="secondary"
-          onClick={resetFilters}
           type="button"
+          onClick={() => setReload((value) => value + 1)}
         >
-          <RotateCcw className="size-4" aria-hidden="true" />
-          Reset filter
+          <RefreshCw className="size-4" />
+          Muat ulang
         </Button>
       </section>
-
-      <section
-        aria-label="Hasil batch"
-        className="min-w-0 border-y border-border bg-white"
-      >
+      <section className="border-y border-border bg-white">
         {loading ? <TableSkeleton /> : null}
         {!loading && error ? (
           <ErrorState
             message={error}
-            onRetry={() => setReloadKey((value) => value + 1)}
+            onRetry={() => setReload((value) => value + 1)}
           />
         ) : null}
         {!loading && !error && result?.items.length === 0 ? (
           <EmptyState
-            title="Belum ada batch untuk filter ini"
-            description="Ubah rentang tanggal atau status. Penerimaan yang baru dicatat akan muncul di daftar ini."
-            action={
-              canCreate ? (
-                <ButtonLink href="/batches/new">
-                  <Plus className="size-4" aria-hidden="true" />
-                  Catat penerimaan
-                </ButtonLink>
-              ) : null
-            }
+            title="Belum ada batch"
+            description="Ubah filter atau catat penerimaan baru."
           />
         ) : null}
         {!loading && !error && result && result.items.length > 0 ? (
           <>
             <div className="max-w-full overflow-x-auto">
-              <table className="w-full min-w-[1060px] border-collapse text-left text-sm">
-                <thead className="sticky top-0 z-10 bg-[#edf2f6] text-xs font-bold uppercase text-slate-600">
+              <table className="w-full min-w-[920px] border-collapse text-left text-sm">
+                <thead className="bg-[#edf2f6] text-xs font-bold uppercase text-slate-600">
                   <tr>
-                    <th className="px-4 py-3">Kode batch</th>
+                    <th className="px-4 py-3">Kode</th>
                     <th className="px-4 py-3">Spesies / ukuran</th>
-                    <th className="px-4 py-3">Tanggal masuk</th>
-                    <th className="px-4 py-3 text-right">Jumlah awal</th>
-                    <th className="px-4 py-3 text-right">Stok saat ini</th>
-                    <th className="px-4 py-3 text-right">Modal beli</th>
-                    <th className="px-4 py-3 text-right">Ongkos kirim</th>
-                    <th className="px-4 py-3 text-right">Berat / 500</th>
-                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Tanggal</th>
+                    <th className="px-4 py-3 text-right">Stok</th>
+                    <th className="px-4 py-3">Status batch</th>
+                    <th className="px-4 py-3">Kesiapan jual</th>
                     <th className="px-4 py-3">
-                      <span className="sr-only">Detail</span>
+                      <span className="sr-only">Aksi</span>
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {result.items.map((item, index) => (
-                    <tr
-                      key={item.batch.id}
-                      className={index % 2 ? "bg-[#fbfcfd]" : "bg-white"}
-                    >
+                  {result.items.map((item) => (
+                    <tr key={item.batch.id}>
                       <td className="px-4 py-3.5">
                         <Link
-                          className="font-mono text-xs font-semibold tabular-nums text-marine hover:text-sky-hover"
+                          className="font-mono text-xs font-semibold text-marine"
                           href={`/batches/${item.batch.id}`}
                         >
                           {item.batch.batch_code}
@@ -239,48 +220,42 @@ export default function BatchesPage() {
                         <p className="font-semibold text-marine">
                           {item.species.species_name}
                         </p>
-                        <p className="mt-0.5 text-xs text-slate-500">
+                        <p className="text-xs text-slate-500">
                           {item.incoming_fish?.fish_size ?? "—"}
                         </p>
                       </td>
-                      <td className="px-4 py-3.5 tabular-nums text-slate-700">
+                      <td className="px-4 py-3.5 tabular-nums">
                         {item.incoming_fish
                           ? formatBusinessDate(item.incoming_fish.entry_date)
                           : "—"}
                       </td>
-                      <td className="px-4 py-3.5 text-right tabular-nums font-semibold">
-                        {item.incoming_fish
-                          ? `${formatInteger(item.incoming_fish.quantity)} ekor`
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3.5 text-right tabular-nums font-semibold">
+                      <td className="px-4 py-3.5 text-right font-semibold tabular-nums">
                         {formatInteger(item.batch.current_stock)} ekor
-                      </td>
-                      <td className="px-4 py-3.5 text-right tabular-nums text-slate-700">
-                        {item.incoming_fish
-                          ? formatRupiah(item.incoming_fish.purchase_capital)
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3.5 text-right tabular-nums text-slate-700">
-                        {item.incoming_fish
-                          ? formatRupiah(item.incoming_fish.shipping_capital)
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3.5 text-right tabular-nums text-slate-700">
-                        {item.incoming_fish?.weight_sample_per_500
-                          ? `${item.incoming_fish.weight_sample_per_500} g`
-                          : "—"}
                       </td>
                       <td className="px-4 py-3.5">
                         <StatusBadge status={item.batch.status} />
                       </td>
+                      <td className="px-4 py-3.5">
+                        <SaleReadinessBadge value={item.batch.sale_readiness} />
+                      </td>
                       <td className="px-4 py-3.5 text-right">
-                        <Link
-                          className="text-xs font-bold text-sky-hover hover:underline"
-                          href={`/batches/${item.batch.id}`}
-                        >
-                          Buka detail
-                        </Link>
+                        {canManageReadiness &&
+                        item.batch.status === "active" ? (
+                          <Button
+                            variant="secondary"
+                            type="button"
+                            onClick={() => void openReadiness(item)}
+                          >
+                            Ubah
+                          </Button>
+                        ) : (
+                          <Link
+                            className="text-xs font-bold text-sky-hover"
+                            href={`/batches/${item.batch.id}`}
+                          >
+                            Detail
+                          </Link>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -301,6 +276,85 @@ export default function BatchesPage() {
           </>
         ) : null}
       </section>
+
+      {selected ? (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-marine/35 p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-lg border border-border bg-white p-5">
+            <h2 className="font-bold text-marine">
+              Ubah kesiapan jual · {selected.batch.batch_code}
+            </h2>
+            <div className="mt-4 grid gap-3">
+              <button
+                type="button"
+                onClick={() => setNextReadiness("BELUM_SIAP")}
+                className={`min-h-11 border px-3 text-sm font-semibold ${nextReadiness === "BELUM_SIAP" ? "border-warning bg-[#fff7ed] text-[#9a4f05]" : "border-border text-marine"}`}
+              >
+                Belum siap
+              </button>
+              <button
+                type="button"
+                onClick={() => setNextReadiness("SIAP_JUAL")}
+                className={`min-h-11 border px-3 text-sm font-semibold ${nextReadiness === "SIAP_JUAL" ? "border-success bg-[#eff8ed] text-[#347c2c]" : "border-border text-marine"}`}
+              >
+                Siap jual
+              </button>
+              <Field
+                id="readiness-note-list"
+                label="Catatan lapangan"
+                hint="Opsional"
+              >
+                <Textarea
+                  id="readiness-note-list"
+                  value={note}
+                  onChange={(event) => setNote(event.target.value)}
+                  maxLength={500}
+                />
+              </Field>
+            </div>
+            {selected.sale_readiness_histories?.length ? (
+              <div className="mt-4 border-t border-border pt-3">
+                <p className="text-xs font-bold uppercase text-slate-500">
+                  Riwayat terbaru
+                </p>
+                {selected.sale_readiness_histories
+                  .slice(0, 3)
+                  .map((history) => (
+                    <p key={history.id} className="mt-2 text-sm text-slate-700">
+                      {history.from_readiness ?? "Belum ada"} →{" "}
+                      {history.to_readiness}
+                      {history.note ? ` · ${history.note}` : ""}
+                    </p>
+                  ))}
+              </div>
+            ) : null}
+            {actionError ? (
+              <p className="mt-3 text-sm text-danger" role="alert">
+                {actionError}
+              </p>
+            ) : null}
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={() => setSelected(null)}
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                disabled={saving}
+                onClick={() => void saveReadiness()}
+              >
+                {saving ? "Menyimpan…" : "Simpan"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

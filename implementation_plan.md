@@ -1055,167 +1055,122 @@ Gate dinyatakan lulus hanya jika:
 
 **Status:** `DONE` — 2026-11-22. Schema valid, dua migrasi V4.6 applied pada `pfi_db`, Prisma Client generated, 3 histori penjualan lama tetap terbaca, dan 2 harga lama ter-backfill ke produk. Trigger lifecycle V4.5 dan append-only `fish_sales` terverifikasi tetap aktif. Automated API/regression tests belum dijalankan karena adaptasi service adalah scope P8-02.
 
-## Task P8-02 — Backend API & RBAC Katalog + Gerbang Siap Jual
+## Task P8-02 — Backend API & RBAC Katalog + Gerbang Siap Jual (**SELESAI**)
 
 **Dependency:** P8-01 selesai.
 
-**Status:** `ACTIVE`.
+**Status:** `DONE` — 2026-11-23. Migrasi grant repair P8-02 diterapkan pada `pfi_db` dan `pfi_test`; POS V4.6 readiness, katalog, sales batch/non-batch, audit, idempotency, dan stock lock terverifikasi. POS E2E `pfi_test`: 34/34 PASS; TypeScript API typecheck dan build PASS.
 
 **Scope:** kontrak route katalog dan `/api/v1/sales`; validasi produk/harga/stok; role Owner/Admin Operasional untuk katalog; Owner/Kepala Budidaya untuk kesiapan batch; locking, idempotency, audit, append-only, VOID dan pemulihan stok non-batch; pemetaan sembilan field struk untuk produk non-batch.
 
 **Acceptance criteria:** transaksi batch hanya dari batch active dan `SIAP_JUAL`; penjualan non-batch memakai `batch_id = NULL`; akses lintas-role teruji; seluruh mutasi atomik/audited; kontrak tidak mengubah perilaku klien V4.5 sebelum transisi disetujui.
 
-## Task P8-03 — Frontend Manajemen Produk, Kontrol Siap Jual, & POS Kasir
+## Task P8-03 — Frontend Manajemen Produk, Kontrol Siap Jual, & POS Kasir (**SELESAI**)
 
 **Dependency:** P8-02 selesai dan kontrak API stabil di test.
 
-**Scope:** pengelolaan kategori/produk dan arsip; perubahan kesiapan batch untuk role yang berhak; POS untuk produk batch/non-batch; konfirmasi stok/harga; tampilan status dan struk sesuai sembilan field resmi.
+**Status:** `DONE` — 2026-11-23. UI web kini memiliki manager katalog produk/kategori, badge dan kontrol kesiapan batch, POS katalog batch/non-batch dengan fallback kompatibilitas V4.5, serta receipt 9 field dan Cetak Bluetooth. Web typecheck dan Next production build PASS; layout receipt dan VOID/detail Playwright terisolasi PASS. Sebagian suite POS lama yang masih mock `/pos/batches`/payload lama memerlukan pembaruan route catalog/tombol pada QA lanjutan.
 
-**Acceptance criteria:** UI mengikuti RBAC backend, menyediakan state loading/empty/error/success, meminta konfirmasi yang diwajibkan, dan tidak mengubah data transaksi historis.
+## Phase 8 (V4.6) — Rencana Implementasi Terukur & Anti-Slop
 
----
-
-# 16. Template sesi kerja AI
-
-Gunakan template ini setiap kali memulai satu Task ID. Isi hanya satu Task ID per sesi.
-
-```text
-Kita sedang mengerjakan proyek PFI.
-
-Dokumen sumber yang wajib dibaca:
-1. prd.md
-2. master_blueprint_api_contract_pfi_main.md
-3. implementation_plan.md
-
-Task ID: [ISI SATU TASK ID]
-
-Instruksi:
-1. Periksa repository dan kondisi kode aktual sebelum mengubah file.
-2. Baca requirement dan acceptance criteria yang terkait dengan Task ID ini.
-3. Identifikasi status keputusan: LOCKED, PROPOSED, TBD, atau OUT OF SCOPE.
-4. Sebutkan rencana perubahan file dan cara pengujian sebelum coding.
-5. Jangan mengerjakan Task ID lain.
-6. Jangan menambah fitur atau mengubah keputusan bisnis di luar dokumen.
-7. Jika ada konflik atau keputusan TBD yang memblokir, hentikan bagian terkait dan laporkan secara spesifik.
-8. Implementasikan perubahan sekecil mungkin yang menyelesaikan Task ID ini.
-9. Jalankan tes yang relevan dan laporkan perintah serta hasil aktual.
-10. Perbarui dokumentasi teknis yang memang terdampak.
-
-Format laporan akhir:
-- Task ID dan status: DONE / BLOCKED / PARTIAL
-- Requirement yang dipenuhi
-- File yang dibuat/diubah
-- Ringkasan perubahan
-- Tes yang dijalankan dan hasil
-- Acceptance criteria yang lulus/gagal
-- Risiko atau blocker yang ditemukan
-- Task ID berikutnya yang menjadi dependency
-
-Jangan mengklaim DONE apabila acceptance criteria belum terbukti.
-```
+> **Aturan Eksekusi Agent:** Kerjakan **SATU Task ID per sesi**. Jangan lanjut ke Task ID berikutnya sebelum _Definition of Done (DoD)_ & perintah verifikasi pada task aktif lulus 100%. Jangan mengubah file UI cetak thermal Bluetooth (`web-bluetooth-printer.ts`, `escpos-receipt.ts`) kecuali diminta secara eksplisit.
 
 ---
 
-# 17. Definition of Ready dan Definition of Done
+### Task P8-01: Skema Database, Migrasi Non-Destruktif, & Grants Runtime
 
-## 17.1 Definition of Ready (DoR)
-
-Satu Task ID boleh dimulai jika:
-
-- [ ] Tujuan dan batas scope Task ID jelas.
-- [ ] Requirement ID dari PRD/Blueprint telah dicantumkan.
-- [ ] Status keputusan sudah diketahui.
-- [ ] Dependency sebelumnya selesai.
-- [ ] Field, validasi, role, dan user flow terkait sudah didefinisikan.
-- [ ] Dampak database dan API diketahui.
-- [ ] Acceptance criteria dapat diverifikasi.
-- [ ] Tidak ada TBD yang memblokir Task ID.
-- [ ] Repository dan file yang akan diubah sudah diperiksa.
-
-## 17.2 Definition of Done (DoD)
-
-Satu Task ID dinyatakan selesai jika:
-
-- [ ] Implementasi hanya mencakup scope yang disepakati.
-- [ ] Tidak ada perubahan aturan bisnis tanpa persetujuan.
-- [ ] Validasi dan otorisasi diterapkan pada lapisan yang tepat.
-- [ ] Tes terkait sudah dijalankan dan hasilnya tercatat.
-- [ ] Tidak ada regression yang diketahui.
-- [ ] Dokumentasi yang terdampak telah diperbarui.
-- [ ] Tidak ada secret atau data sensitif yang masuk repository/log.
-- [ ] Hasil review diterima oleh pemilik proyek atau reviewer yang ditunjuk.
+- **Scope:** `apps/api/prisma/schema.prisma`, `apps/api/prisma/migrations/*`.
+- **Instruksi Presisi:**
+  1. Tambahkan enum `SaleReadiness` (`BELUM_SIAP`, `SIAP_JUAL`) dan `ProductTrackingMode` (`BATCH_TRACKED`, `NON_BATCH`).
+  2. Tambahkan kolom `sale_readiness` (default `BELUM_SIAP`) pada `batches` dan tabel append-only `batch_sale_readiness_histories` beserta trigger immutability.
+  3. Buat tabel `product_categories` dan `products` (dengan partial unique index aktif `(species, size_label)` untuk `BATCH_TRACKED`, check constraint nominal `0 < unit_price <= 10000000`, serta backfill aman dari `fish_sale_prices`).
+  4. Rename `fish_sales.total_amount` menjadi `total_price` (`NUMERIC(14,2)`) secara _in-place_ (JANGAN `DROP COLUMN`), tambahkan `product_id` nullable, dan ubah `batch_id` menjadi nullable.
+  5. Berikan `GRANT` kolom/tabel yang tepat untuk role `pfi_app_runtime`.
+- **DoD & Verifikasi:**
+  - `npx prisma validate --schema apps/api/prisma/schema.prisma` -> PASS.
+  - `npx prisma migrate status --schema apps/api/prisma/schema.prisma` -> Up to date, 0 data historis hilang, trigger `batches_status_transition_guard` dan `fish_sales_immutable` tetap aktif.
 
 ---
 
-# 18. Daftar risiko dan mitigasi
+### Task P8-02: Backend API, RBAC, & Penguncian Transaksi `SIAP_JUAL`
 
-| Risiko                                         | Dampak                                | Mitigasi/gerbang                                                                                     |
-| ---------------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Stack dipilih tanpa audit repository           | Rework dan konflik dependency         | P0-01 wajib sebelum keputusan stack dan coding.                                                      |
-| AI mengarang keputusan TBD                     | Skema/API berubah berulang            | Gunakan Gate POS dan larangan asumsi.                                                                |
-| Role hanya dibatasi pada frontend              | Akses ilegal melalui API              | RBAC backend dan privilege database wajib diuji.                                                     |
-| Request diulang akibat jaringan                | Transaksi ganda                       | Idempotency UUIDv4 dan payload hash.                                                                 |
-| Dua pengguna mengubah stok bersamaan           | Overselling/stok negatif              | Batch row locking dan validasi stok ulang dalam transaksi.                                           |
-| Audit gagal tersimpan                          | Aksi bisnis tanpa jejak               | Audit berada dalam transaksi ACID yang sama.                                                         |
-| Data penerimaan/penjualan diubah atau dihapus  | Histori tidak dapat dipercaya         | Append-only, reversal, trigger, dan runtime privileges.                                              |
-| Perubahan daftar harga mengubah transaksi lama | Nilai transaksi historis berubah      | Snapshot harga pada saat penjualan.                                                                  |
-| Printer gagal setelah transaksi tersimpan      | Kasir mengulang penjualan             | Pisahkan commit transaksi dari status proses cetak.                                                  |
-| Printer tidak kompatibel dengan perangkat      | Cetak tidak berjalan saat operasional | Uji model/perangkat aktual sebelum integrasi final.                                                  |
-| Modul kematian belum ada                       | Stok belum mencakup gerakan kematian  | Jangan mengarang modul; dokumentasikan batas perhitungan sampai spesifikasi fase kematian disetujui. |
-| Deployment tanpa backup teruji                 | Kehilangan data saat insiden          | Backup dan restore test wajib sebelum go-live.                                                       |
+- **Scope:** `apps/api/src/modules/batches/*`, `apps/api/src/modules/pos/*`, `apps/api/test/*`.
+- **Instruksi Presisi:**
+  1. Implementasikan `PATCH /api/v1/batches/:id/sale-readiness` khusus `Owner` & `Kepala Budidaya` dengan pencatatan ke `batch_sale_readiness_histories` dan `audit_logs`.
+  2. Implementasikan CRUD kategori & produk (`/api/v1/pos/categories`, `/api/v1/pos/products`) dengan arsip soft-delete (`is_active = false`) khusus `Owner` & `Admin Operasional`.
+  3. Implementasikan `GET /api/v1/pos/catalog` yang hanya menayangkan produk aktif dengan batch `active + SIAP_JUAL` (`> 0`) atau stok `NON_BATCH > 0`.
+  4. Perbarui `POST /api/v1/sales` dan `POST /api/v1/sales/:id/void` dengan row-level locking (`SELECT ... FOR UPDATE`), validasi ulang `SIAP_JUAL`, dukungan `batch_id = NULL` untuk `NON_BATCH`, dan serializer struk 9 field.
+- **DoD & Verifikasi:**
+  - `npm run typecheck --workspace @pfi/api` -> 0 error.
+  - `npm run build --workspace @pfi/api` -> 0 error.
+  - `RUN_V45_DB_TESTS=1 npm test --workspace @pfi/api -- --runInBand test/pos-sales-api.e2e.spec.ts` -> Seluruh skenario RBAC, `SIAP_JUAL`, `BATCH_TRACKED`, `NON_BATCH`, dan `VOID` PASS.
 
 ---
 
-# 19. Pelacakan requirement dan test
+### Task P8-03: Frontend UI (Katalog Produk, Kontrol Batch `SIAP_JUAL`, & Kasir POS)
 
-Gunakan pemetaan berikut sebagai minimum traceability. Detail test case harus diturunkan dari PRD dan Master Blueprint, bukan dibuat dengan mengubah aturan sumber.
-
-| Area           | Requirement utama                                | Phase implementasi  | Bukti akhir                                            |
-| -------------- | ------------------------------------------------ | ------------------- | ------------------------------------------------------ |
-| Authentication | FR-AUTH-01 s.d. FR-AUTH-03                       | Phase 3             | Auth unit/integration tests                            |
-| Penerimaan     | FR-REC-01 s.d. FR-REC-09                         | Phase 2, 4, 5       | TC-01 s.d. TC-32 dan acceptance PRD                    |
-| Batch dan stok | FR-BATCH-01 s.d. FR-BATCH-04                     | Phase 2, 4, 6, 7    | Constraint, stock tests, concurrency tests             |
-| POS            | FR-POS-01 s.d. FR-POS-05                         | Gate POS, Phase 7–9 | POS workflow tests                                     |
-| Harga          | FR-PRICE-01 s.d. FR-PRICE-07                     | Gate POS, Phase 7–8 | Price CRUD, snapshot, authorization tests              |
-| Penjualan      | FR-SALE-01 s.d. FR-SALE-04                       | Phase 7–9           | Sale transaction, sequence, history tests              |
-| Pembayaran     | FR-PAY-01 s.d. FR-PAY-03                         | Phase 7–8           | Cash/transfer boundary tests                           |
-| VOID penjualan | FR-VOID-SALE-01 s.d. FR-VOID-SALE-03             | Phase 7–9           | Reversal, stock restoration, repeated VOID tests       |
-| Printing       | FR-PRINT-01 s.d. FR-PRINT-05                     | Gate POS, Phase 7–9 | Receipt content, printer matrix, failure/reprint tests |
-| Audit          | FR-AUD-01                                        | Phase 2, 4, 7       | Atomic audit and access tests                          |
-| Idempotency    | FR-IDEM-01                                       | Phase 2, 4, 7       | Retry and payload mismatch tests                       |
-| Concurrency    | FR-CONC-01                                       | Phase 4, 6, 7, 9    | Locking and overselling tests                          |
-| NFR            | NFR-SEC, DATA, TRANS, TIME, PERF, PRINT, UX, REG | Phase 2–10          | Security, load, regression, and operational reports    |
+- **Scope:** `apps/web/src/app/(operational)/batches/[id]/page.tsx`, `apps/web/src/app/(operational)/batches/page.tsx`, `apps/web/src/app/(operational)/pos/prices/page.tsx`, `apps/web/src/app/(operational)/pos/page.tsx`, `apps/web/src/features/pos/*`.
+- **Instruksi Presisi:**
+  1. **Detail & Daftar Batch (`/batches`, `/batches/[id]`):** Tampilkan badge `SaleReadinessBadge` (`BELUM_SIAP` / `SIAP_JUAL`). Khusus `Owner` dan `Kepala Budidaya` pada batch `active`, render panel kontrol **Ubah Kesiapan Jual** (`Tandai SIAP_JUAL` / `Tarik ke BELUM_SIAP` + input `note`) dan tabel **Riwayat Kesiapan Jual**.
+  2. **Manajemen Produk & Harga (`/pos/prices`):** Evolusikan halaman menjadi manajemen kategori & produk (`BATCH_TRACKED` vs `NON_BATCH`), form tambah/edit harga & stok umum, serta tombol arsip produk (khusus `Owner` & `Admin Operasional`; mode baca untuk role lain).
+  3. **Layar Kasir POS (`/pos`):** Ganti daftar mentah batch dengan katalog dari `GET /api/v1/pos/catalog`. Saat memilih produk `BATCH_TRACKED`, tampilkan pilihan batch `SIAP_JUAL` spesifik sebelum input kuantitas; untuk `NON_BATCH`, langsung input kuantitas. Pastikan struk 9 field & cetak Bluetooth tetap berjalan normal.
+- **DoD & Verifikasi:**
+  - `npm run typecheck --workspace @pfi/web` -> 0 error.
+  - `npm run build --workspace @pfi/web` -> 0 error.
 
 ---
 
-# 20. Kriteria akhir MVP siap go-live
+### Task P8-04: Pembaruan Suite E2E Playwright & Uji Regresi End-to-End
 
-MVP dapat dinyatakan siap go-live hanya jika seluruh poin berikut terpenuhi:
+- **Scope:** `apps/web/e2e/pos-cashier.spec.ts`, `apps/web/e2e/pos-prices.spec.ts`, `apps/web/e2e/pos-sale-detail.spec.ts`, `apps/web/e2e/pos-print-workflow.spec.ts`.
+- **Instruksi Presisi:**
+  1. Migrasikan mock endpoint lama (`/fish-sale-prices`, daftar mentah `/batches` pada kasir) pada suite E2E Playwright agar menggunakan kontrak V4.6 (`/pos/catalog`, `/pos/products`, `/pos/categories`, dan `/batches/:id/sale-readiness`).
+  2. Tambahkan skenario E2E untuk: (a) Kepala Budidaya mengubah batch `BELUM_SIAP` -> `SIAP_JUAL`, (b) Admin Operasional menambah produk `BATCH_TRACKED` & `NON_BATCH`, (c) Kasir melakukan transaksi kedua tipe produk dan mencetak struk.
+- **DoD & Verifikasi:**
+  - Seluruh test E2E Playwright pada direktori `apps/web/e2e/pos-*.spec.ts` lulus 100% tanpa test yang di-skip.
 
-- [ ] Semua Task ID yang termasuk scope telah selesai atau memiliki pengecualian tertulis yang disetujui.
-- [ ] Seluruh alur Penerimaan dan VOID Penerimaan sesuai Master Blueprint V4.5.
-- [ ] Seluruh 32 test case V4.5 lulus.
-- [ ] Seluruh acceptance criteria POS yang disetujui lulus.
-- [ ] Tidak ada transaksi ganda akibat retry.
-- [ ] Tidak ada stok negatif akibat concurrency.
-- [ ] Semua VOID dicatat sebagai reversal; data historis asli tetap tersedia.
-- [ ] RBAC backend dan privilege database sesuai matriks role.
-- [ ] Audit dan transaksi bisnis konsisten secara atomik.
-- [ ] Snapshot harga penjualan tidak berubah ketika katalog diperbarui.
-- [ ] Kegagalan cetak tidak menggagalkan transaksi yang telah tersimpan.
-- [ ] Cetak ulang dibatasi kepada pembuat transaksi dan transaksi non-VOID.
-- [ ] Kompatibilitas printer hanya diklaim untuk kombinasi perangkat yang telah diuji.
-- [ ] Backup dan restore telah diuji.
-- [ ] Smoke test production lulus.
-- [ ] Dokumentasi pengguna dan runbook tersedia.
-- [ ] Pemilik proyek menyetujui release.
+  ## V4.6 Release Gate Checklist (Sign-Off Wajib Sebelum Penutupan Phase 8)
 
----
+* [ ] **DB & Migrasi (`P8-01`):** `prisma migrate status` bersih, trigger V4.5 utuh, grants `pfi_app_runtime` lengkap untuk `products`, `product_categories`, `batch_sale_readiness_histories`, dan `audit_logs`.
+* [ ] **RBAC Lapangan (`P8-02` & `P8-03`):** `Kepala Budidaya` & `Owner` dapat mengubah `BELUM_SIAP` <-> `SIAP_JUAL` pada batch `active` dengan catatan, dan riwayat tercatat; `Admin Operasional` & `Kasir` mendapat `403` jika mencoba memutasi readiness.
+* [ ] **RBAC Katalog (`P8-02` & `P8-03`):** `Admin Operasional` & `Owner` dapat menambah, mengedit harga/stok, dan mengarsipkan (`is_active = false`) produk `BATCH_TRACKED` maupun `NON_BATCH`.
+* [ ] **Kasir POS Siap Jual (`P8-02` & `P8-03`):**
+  - [ ] Batch `BELUM_SIAP` tidak muncul dan ditolak (`422`) saat checkout.
+  - [ ] Produk `BATCH_TRACKED` menampilkan stok gabungan batch `SIAP_JUAL` dan mewajibkan pemilihan batch spesifik (`quantity` integer).
+  - [ ] Produk `NON_BATCH` memotong `products.stock_quantity` dengan `batch_id = NULL`.
+* [ ] **Struk 9 Field & Bluetooth Print (`P8-03`):** Struk transaksi `BATCH_TRACKED` maupun `NON_BATCH` (fallback `product.sku`) tampil lengkap 9 field dan dapat dicetak via Web Bluetooth ESC/POS tanpa error.
+* [ ] **Automated Quality Gate (`P8-04`):** `npm run typecheck`, `npm run build`, backend E2E (`pos-sales-api.e2e.spec.ts`), dan frontend E2E (`pos-*.spec.ts`) lulus 100%.
 
-# 21. Riwayat dokumen
+## P8-AUDIT — Audit Kepatuhan Kode V4.6 (**SELESAI**)
 
-| Versi | Perubahan                                                                                                                                                            |
-| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1.0   | Rencana implementasi modular berdasarkan PRD 1.0, Master Blueprint V4.5, dan keputusan bisnis POS. Memisahkan implementasi V4.5 dari gerbang persetujuan teknis POS. |
+**Status:** `DONE` — 2026-11-23. Audit read-only menemukan gap pada sinkronisasi aturan, skema kuantitas/harga per mode, RBAC `/pos/catalog`, serializer struk, kontrol kesiapan batch, UI kategori, dan migrasi E2E Playwright. API POS E2E 34/34 lulus; typecheck API dan web lulus; Playwright POS 22 lulus dan 12 gagal. Status migrasi database live tidak terverifikasi karena `MIGRATION_DATABASE_URL` tidak tersedia. Tidak ada file kode yang diubah pada audit.
 
-**Akhir dokumen.**
+## P8-FIX — Perbaikan Pasca-Audit
+
+### P8-FIX-01 — Penyelarasan Dokumen & Kontrak Struk (**DONE**)
+
+**Status:** `DONE` — 2026-11-23. `AGENTS.md` dan `GEMINI.md` disamakan; governance lock dan path skill aktual ditambahkan. PRD, architecture, Master Blueprint, dan skill menetapkan sembilan slot tanpa Kode Batch serta serializer create-sale/cetak ulang yang identik.
+
+### P8-FIX-02 — Migrasi Database (**DONE**)
+
+**Scope:** ubah `fish_sales.quantity` ke `NUMERIC(12,2)` dengan aturan integer untuk `BATCH_TRACKED`; tambahkan constraint harga integer mode `BATCH_TRACKED`; pertahankan `audit_logs.old_values/new_values` sebagai kolom nullable demi kompatibilitas layanan V4.5.
+
+**Status:** `DONE` — 2026-11-24. Migrasi berhasil diterapkan ke `pfi_db` dan `pfi_test`; Prisma Client berhasil di-generate dan `prisma migrate status` menyatakan skema up to date. Trigger V4.5 `batches_status_transition_guard` dan `fish_sales_immutable` terverifikasi ada serta enabled di kedua database. Kolom `audit_logs.old_values/new_values` dipertahankan nullable demi kompatibilitas layanan V4.5; detail kesiapan jual batch disimpan di `batch_sale_readiness_histories`.
+
+### P8-FIX-03 — Backend API & Serializer (**ACTIVE**)
+
+**Dependency:** P8-FIX-02 selesai.
+
+**Scope:** batasi RBAC `GET /pos/catalog` ke `Owner`, `Admin Operasional`, dan `Kasir`; validasi kuantitas/harga berdasarkan mode; samakan serializer sembilan slot untuk response penjualan baru dan cetak ulang.
+
+### P8-FIX-04 — Frontend UI (**NOT STARTED**)
+
+**Dependency:** P8-FIX-03 selesai.
+
+**Scope:** render panel `BELUM_SIAP` <-> `SIAP_JUAL`, catatan, dan tabel riwayat di `/batches/[id]`; sediakan UI CRUD kategori di `/pos/prices`; dukung kuantitas desimal `NON_BATCH` di `/pos`.
+
+### P8-FIX-05 — Migrasi E2E Playwright (**NOT STARTED**)
+
+**Dependency:** P8-FIX-04 selesai.
+
+**Scope:** migrasikan seluruh `apps/web/e2e/pos-*.spec.ts` ke kontrak V4.6, tambahkan test kesiapan jual dan kuantitas pecahan `NON_BATCH`, lalu pastikan seluruh suite POS lulus tanpa test di-skip.

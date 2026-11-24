@@ -30,7 +30,8 @@ Before implementing or changing behavior, locate and read the relevant sections 
 - `architecture.md` — system architecture, relational database schema, transaction flows, device/printing strategy, and owner-approved architecture decisions.
 - `implementation_plan.md` — ordered phases, task IDs, dependencies, gates, and task-level acceptance criteria.
 
-If a required document is missing, report that fact. Do not reconstruct missing requirements from memory or invent a replacement contract.
+- Required V4.6 guardrail: `.github/skills/v46-pos-guard/SKILL.md`.
+  If a required document is missing, report that fact. Do not reconstruct missing requirements from memory or invent a replacement contract.
 
 ### 2.1 Source-of-truth hierarchy
 
@@ -234,17 +235,19 @@ The following business behavior is confirmed. The technical POS design still has
 
 ### 7.7 Receipt and printing
 
-The printed receipt must contain only the approved information:
+The receipt has exactly these nine ordered slots, with no separate batch-code slot:
 
-1. Company name: Pisciculture Farm Indonesia.
-2. Date and time.
-3. Fish species.
-4. Fish size.
-5. Quantity in `ekor`.
-6. Price per fish.
-7. Total payment.
-8. Payment method.
-9. Cashier name.
+1. Company name: `PT. Pisciculture Farm Indonesia` (`company_name`).
+2. Transaction date and time (`transaction_date_time`).
+3. Fish/product: `species_name` for `BATCH_TRACKED`, or `product.name` for `NON_BATCH`.
+4. Size/variant: `fish_size` for `BATCH_TRACKED`, or `product.sku` for `NON_BATCH`.
+5. Quantity and product unit (`quantity` + `unit`), rendered together as one slot.
+6. Unit price (`unit_price`).
+7. Total payment (`total_price`).
+8. Payment method (`CASH` or `TRANSFER`).
+9. Cashier name (`cashier_name`).
+
+The create-sale response and receipt-reprint response must return the same nine-slot structure and apply the same mapping. Never add a separate batch-code, sale-number, customer, transfer-reference, or VOID slot.
 
 Do not add sale number, batch code, customer information, transfer reference, or other unapproved fields.
 
@@ -476,4 +479,27 @@ A task is done only when:
 
 ---
 
-**End of PFI project instructions.**
+## Governance Lock: Active Release Stage = V4.6 (Phase 8)
+
+1. **Scope Boundary (Strict V4.6 Only):**
+   - Agent hanya diizinkan mengerjakan fitur dalam cakupan **V4.6 (Phase 8)**:
+     1. Gerbang kesiapan jual batch (`batches.sale_readiness`: `BELUM_SIAP` <-> `SIAP_JUAL`) & riwayat auditnya (`batch_sale_readiness_histories`).
+     2. Katalog multi-produk POS (`product_categories` & `products` dengan mode `BATCH_TRACKED` dan `NON_BATCH`).
+     3. Adaptasi kasir POS, transaksi `fish_sales` (1 item per struk), VOID, dan struk 9 field resmi.
+   - **DILARANG KERAS** menambahkan atau merancang fitur di luar V4.6 tanpa persetujuan tertulis Owner, termasuk:
+     - Keranjang multi-baris (_multi-line shopping cart_) dalam 1 struk.
+     - Modul pembelian supplier / _Purchase Order_ / akuntansi laba-rugi otomatis.
+     - Integrasi payment gateway pihak ketiga (QRIS API, Midtrans, Xendit) atau ERP eksternal.
+     - Penambahan role pengguna baru di luar 4 role resmi (`Owner`, `Kepala Budidaya`, `Admin Operasional`, `Kasir`).
+
+2. **Protected Assets & Files (Do Not Break):**
+   - **Database Guards:** Jangan pernah mengubah atau menonaktifkan trigger V4.5 (`batches_status_transition_guard`, `fish_sales_immutable`) maupun tabel ringkas `audit_logs` (tanpa kolom `old_values`/`new_values`).
+   - **Thermal Bluetooth Printing:** Jangan mengubah atau menghapus logic cetak thermal ESC/POS Web Bluetooth (`apps/web/src/features/pos/web-bluetooth-printer.ts`, `escpos-receipt.ts`, dan tombol cetak di detail struk) kecuali ada bug regresi V4.6 yang terbukti.
+   - **Single Source of Truth:** Semua baca/tulis katalog & harga wajib melalui `products` & `product_categories`. Jangan menghidupkan kembali `fish_sale_prices` untuk fitur baru.
+
+3. **Execution & Token Discipline (Anti-Slop Protocol):**
+   - Kerjakan maksimal **satu Task ID** (`P8-01`, `P8-02`, `P8-03`, atau `P8-04`) per instruksi pengguna.
+   - Jangan membaca seluruh file besar jika hanya membutuhkan bagian tertentu; gunakan pencarian terarah.
+   - Saat menjalankan test/build di terminal, batasi output log agar ringkas (`| tail -n 40`) dan jalankan test spesifik terlebih dahulu sebelum full suite.
+   - Sebelum menyatakan task selesai, wajib memverifikasi `typecheck`, `build`, dan `git diff --check` tanpa meninggalkan file sementara/mock.
+     **End of PFI project instructions.**

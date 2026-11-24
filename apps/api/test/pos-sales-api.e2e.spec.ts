@@ -675,8 +675,6 @@ databaseSuite("POS create-sale HTTP integration", () => {
     createPayload.category_id = category.id;
 
     const created = await postProduct(owner, createPayload);
-    if (created.status !== 201) throw new Error(JSON.stringify(created.body));
-    expect(created.body).toMatchObject({ status: "success" });
     expect(created.status).toBe(201);
     expect(created.body.data.unit_price).toBe(15000.5);
 

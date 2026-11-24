@@ -18,16 +18,27 @@ export interface IncomingFishItem {
   voided: boolean;
 }
 
+export interface BatchReadinessHistory {
+  id: string;
+  from_readiness: "BELUM_SIAP" | "SIAP_JUAL" | null;
+  to_readiness: "BELUM_SIAP" | "SIAP_JUAL";
+  changed_by: { id: string; name: string };
+  note: string | null;
+  created_at: string;
+}
+
 export interface BatchItem {
   batch: {
     id: string;
     batch_code: string;
     status: BatchStatus;
+    sale_readiness: "BELUM_SIAP" | "SIAP_JUAL";
     current_stock: number;
     created_at: string;
   };
   species: SpeciesItem;
   incoming_fish: IncomingFishItem | null;
+  sale_readiness_histories: BatchReadinessHistory[];
 }
 
 export interface PaginationData<TItem> {

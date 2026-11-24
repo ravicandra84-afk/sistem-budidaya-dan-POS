@@ -35,8 +35,8 @@ interface SaleDetail {
   id: string;
   sale_code: string;
   created_at: string;
-  batch_id: string;
-  batch_code: string;
+  batch_id: string | null;
+  batch_code: string | null;
   species_name: string;
   fish_size: string | null;
   quantity: number;
@@ -201,7 +201,7 @@ export default function PosSaleDetailPage() {
         "Transaksi berhasil di-VOID dan status terbaru telah dimuat.",
       );
       const latestSale = await refreshSale();
-      if (latestSale) await refreshBatch(latestSale.batch_id);
+      if (latestSale?.batch_id) await refreshBatch(latestSale.batch_id);
     } catch (error) {
       if (
         error instanceof ApiClientError &&
@@ -211,7 +211,7 @@ export default function PosSaleDetailPage() {
           "Transaksi sudah lebih dahulu di-VOID. Status terbaru sedang dimuat.",
         );
         const latestSale = await refreshSale().catch(() => null);
-        if (latestSale) await refreshBatch(latestSale.batch_id);
+        if (latestSale?.batch_id) await refreshBatch(latestSale.batch_id);
       } else {
         setActionError(errorMessage(error));
       }

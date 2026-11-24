@@ -189,7 +189,8 @@ Status: `APPROVED — OWNER`, pasca-MVP. Persyaratan ini menambah kemampuan POS 
 - Tambahkan relasi `product_id`; baris historis yang sudah ada tetap valid dengan `product_id = NULL`. Penjualan baru wajib mereferensikan produk aktif.
 - `batch_id` menjadi nullable untuk mengakomodasi penjualan `NON_BATCH`. Baris penjualan `BATCH_TRACKED` wajib memiliki batch; baris `NON_BATCH` wajib memiliki `batch_id = NULL`.
 - Pembuatan penjualan katalog menggunakan `POST /api/v1/sales`, idempotency UUIDv4, dan transaksi database. Untuk produk `BATCH_TRACKED`, backend wajib mengunci batch dengan `SELECT ... FOR UPDATE`, lalu memvalidasi ulang status aktif, `sale_readiness = 'SIAP_JUAL'`, stok, harga, dan pembayaran sebelum commit.
-- Field struk tetap sembilan. Pemetaan identitas produk `NON_BATCH` ke slot spesies/ukuran pada struk serta dampak harga desimal ke snapshot pembayaran harus dikunci sebagai bagian kontrak P8-02; jangan menambah field struk atau membulatkan nilai diam-diam.
+- Struk memiliki tepat sembilan slot V4.5 dan tidak memiliki slot Kode Batch: nama perusahaan (`PT. Pisciculture Farm Indonesia`), tanggal/waktu transaksi, jenis ikan/produk (`species_name` untuk `BATCH_TRACKED`, `product.name` untuk `NON_BATCH`), ukuran/kode varian (`fish_size` untuk `BATCH_TRACKED`, `product.sku` untuk `NON_BATCH`), jumlah dan unit produk dalam satu slot (`quantity` + `unit`), harga satuan (`unit_price`), total pembayaran (`total_price`), metode pembayaran (`CASH` atau `TRANSFER`), dan nama kasir (`cashier_name`).
+- Response penjualan baru dan response cetak ulang wajib memakai struktur sembilan slot dan pemetaan yang identik. Snapshot harga dan total dua-desimal tidak boleh dibulatkan diam-diam.
 
 # 3. Pengguna sasaran dan peran
 
@@ -736,17 +737,19 @@ Baseline cetak adalah browser print CSS 58 mm/80 mm dan dialog cetak sistem. Kep
 
 ### Konten struk wajib
 
-Struk hanya memuat:
+Struk hanya memuat tepat sembilan slot berikut, berurutan:
 
-1. Nama perusahaan: PT. Pisciculture Farm Indonesia.
-2. Tanggal dan waktu transaksi.
-3. Spesies ikan.
-4. Ukuran ikan.
-5. Jumlah ikan (ekor).
-6. Harga per ekor.
-7. Total pembayaran.
-8. Metode pembayaran.
-9. Nama kasir.
+1. Nama Perusahaan: `PT. Pisciculture Farm Indonesia` (`company_name`).
+2. Tanggal & Waktu Transaksi (`transaction_date_time`).
+3. Jenis Ikan / Produk: `species_name` untuk `BATCH_TRACKED`, atau `product.name` untuk `NON_BATCH`.
+4. Ukuran / Kode Varian: `fish_size` untuk `BATCH_TRACKED`, atau `product.sku` untuk `NON_BATCH`.
+5. Jumlah dan unit produk (`quantity` + `unit`), dirender sebagai satu slot.
+6. Harga Satuan (`unit_price`).
+7. Total Pembayaran (`total_price`).
+8. Metode Pembayaran (`CASH` atau `TRANSFER`).
+9. Nama Kasir (`cashier_name`).
+
+Response penjualan baru dan cetak ulang wajib mengembalikan struktur sembilan slot yang identik. Tidak ada slot Kode Batch terpisah.
 
 Tidak boleh ditambahkan:
 
@@ -1173,7 +1176,7 @@ Fitur POS dinyatakan diterima apabila:
 - [ ] Katalog kategori/produk mendukung mode batch dan non-batch, harga dalam batas V4.6, serta arsip tanpa penghapusan historis.
 - [ ] Penjualan batch dan non-batch menjaga invariants relasi `product_id`/`batch_id`, locking, pembayaran, idempotency, audit, nomor harian, dan append-only.
 - [ ] Baris `fish_sales` historis tetap dapat dibaca tanpa mengubah histori atau struk sembilan field.
-- [ ] Perilaku field struk untuk produk non-batch dan pembulatan/penyimpanan pembayaran desimal sudah dikunci serta diuji sebelum rilis V4.6.
+- [ ] Pemetaan sembilan slot untuk `BATCH_TRACKED` dan `NON_BATCH` serta kesamaan struktur serializer penjualan baru/cetak ulang diuji sebelum rilis V4.6.
 
 # 14. Keputusan yang masih terbuka
 
@@ -1329,5 +1332,45 @@ Satu fitur baru boleh mulai dikerjakan jika:
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1.0   | Penyusunan PRD berdasarkan Master Blueprint V4.5 dan perluasan MVP Ikan Keluar (Kasir/POS) yang diberikan pengguna. Memisahkan kebutuhan terkunci, rancangan teknis POS, dan keputusan TBD. |
 | 1.1   | Addendum V4.6 pasca-MVP disetujui Owner: katalog multi-produk dan kesiapan jual batch, dengan lifecycle V4.5 dipertahankan.                                                                 |
+
+## Addendum V4.6 — Katalog Multi-Produk POS & Gerbang Kesiapan Jual Batch
+
+### 1. Latar Belakang & Tujuan Bisnis
+
+Pada baseline V4.5, kasir memilih langsung dari seluruh batch kolam berstatus `active` dan hanya menjual item ikan berbasis daftar harga spesies/ukuran. Pada V4.6, sistem ditingkatkan agar:
+
+1. **Kontrol Mutu Lapangan (`Kepala Budidaya` & `Owner`):** Batch budidaya yang masih `active` tidak otomatis muncul di kasir sebelum dinyatakan siap jual (`SIAP_JUAL`) oleh **Kepala Budidaya** atau **Owner**, dan dapat ditarik kembali ke `BELUM_SIAP` kapan saja.
+2. **Katalog Multi-Produk Terpusat (`Admin Operasional` & `Owner`):** Daftar harga berevolusi menjadi katalog produk POS yang mendukung kategori dinamis: produk berbasis kolam (`BATCH_TRACKED`, seperti benih/ikan konsumsi) maupun produk umum non-batch (`NON_BATCH`, seperti pakan, probiotik, dan sarana budidaya).
+3. **Antarmuka Kasir Berbasis Katalog Siap Jual:** Kasir memilih produk dari katalog siap jual (berdasarkan jenis & ukuran ikan dengan stok gabungan batch `SIAP_JUAL`, atau barang `NON_BATCH` berstok `> 0`), lalu memilih batch spesifik berstatus `SIAP_JUAL` khusus untuk item `BATCH_TRACKED`.
+
+### 2. Matriks Wewenang Pengguna (RBAC V4.6)
+
+| Aksi / Fitur                                                 | Owner | Kepala Budidaya | Admin Operasional | Kasir |
+| :----------------------------------------------------------- | :---: | :-------------: | :---------------: | :---: |
+| Ubah `sale_readiness` batch (`BELUM_SIAP` ↔ `SIAP_JUAL`)     |  Ya   |       Ya        |       Tidak       | Tidak |
+| Lihat status & riwayat `sale_readiness` batch                |  Ya   |       Ya        |        Ya         | Tidak |
+| CRUD Kategori Produk & Produk Katalog (`POST/PATCH/ARCHIVE`) |  Ya   |      Tidak      |        Ya         | Tidak |
+| Lihat Katalog Produk & Harga                                 |  Ya   |       Ya        |        Ya         |  Ya   |
+| Transaksi Penjualan POS (`POST /api/v1/sales`)               |  Ya   |      Tidak      |        Ya         |  Ya   |
+| VOID Transaksi Penjualan (`POST /api/v1/sales/:id/void`)     |  Ya   |      Tidak      |        Ya         | Tidak |
+
+### 3. Functional Requirements (FR-V46)
+
+- **FR-V46-01 (Gerbang Kesiapan Jual Batch):** Setiap batch baru memiliki nilai default `sale_readiness = BELUM_SIAP`. Hanya `Kepala Budidaya` dan `Owner` yang dapat mengubah status batch `active` menjadi `SIAP_JUAL` atau mengembalikannya ke `BELUM_SIAP` dengan catatan opsional. Perubahan pada batch `completed` atau `voided` wajib ditolak (`422`).
+- **FR-V46-02 (Jejak Audit Kesiapan Jual):** Setiap perubahan `sale_readiness` wajib tercatat pada tabel `batch_sale_readiness_histories` (bersifat _append-only_) memuat status asal, status tujuan, aktor pengubah, catatan, dan waktu kejadian.
+- **FR-V46-03 (Manajemen Kategori & Produk Katalog):** `Admin Operasional` dan `Owner` dapat menambah, mengubah harga/detail, dan mengarsipkan (_soft-delete_ `is_active = false`) kategori produk maupun item katalog.
+  - Mode `BATCH_TRACKED`: wajib memiliki `species` dan `size_label` yang unik di antara produk aktif; `stock_quantity` bernilai `NULL` karena stok dihitung dinamis dari agregasi batch `active` + `SIAP_JUAL`.
+  - Mode `NON_BATCH`: wajib memiliki `stock_quantity >= 0`; `species` dan `size_label` bernilai `NULL`.
+  - Batas harga satuan (`unit_price`): wajib `> 0` dan `<= Rp 10.000.000` (`NUMERIC(12,2)`).
+- **FR-V46-04 (Katalog Kasir Siap Jual):** Layar kasir hanya menampilkan produk aktif (`is_active = true`). Untuk `BATCH_TRACKED`, tampilkan akumulasi stok dari seluruh batch dengan `status = 'active'` AND `sale_readiness = 'SIAP_JUAL'` AND `current_stock > 0`. Produk yang stok siap jualnya `0` tidak dapat dipilih untuk transaksi.
+- **FR-V46-05 (Alur Transaksi & Validasi Ulang Atomic):**
+  - Item `BATCH_TRACKED`: kasir wajib memilih `batch_id` spesifik berstatus `SIAP_JUAL`. Saat checkout, server mengunci baris batch & produk (`SELECT ... FOR UPDATE`) untuk memastikan batch masih `active`, masih `SIAP_JUAL`, cocok jenis/ukurannya, dan stoknya mencukupi.
+  - Item `NON_BATCH`: kasir tidak memilih batch (`batch_id = NULL`). Server mengunci baris produk (`SELECT ... FOR UPDATE`) dan memotong `products.stock_quantity`.
+- **FR-V46-06 (Kompatibilitas Struk 9 Field & VOID):** Seluruh transaksi V4.6 tetap menghasilkan nomor struk harian (`sale_daily_sequences`), sifat _append-only_ pada `fish_sales`, serta format struk 9 field resmi yang aman dicetak melalui Web Bluetooth ESC/POS maupun browser (untuk item `NON_BATCH`, kolom identitas batch pada struk menampilkan kode `SKU` produk). Mekanisme `VOID` memulihkan stok ke `batches.current_stock` (jika `batch_id != NULL`) atau `products.stock_quantity` (jika `batch_id == NULL`).
+
+### 4. Out of Scope V4.6
+
+- Keranjang multi-baris (_multi-line cart_) dalam satu nomor struk (tetap 1 item produk per transaksi `fish_sales` demi menjaga integritas struk 9 field dan tabel _append-only_ V4.5).
+- Pembelian/restock stok `NON_BATCH` dari supplier dengan faktur pembelian terpisah (penyesuaian stok `NON_BATCH` dilakukan via manajemen produk oleh `Admin Operasional`/`Owner`).
 
 **Akhir dokumen.**

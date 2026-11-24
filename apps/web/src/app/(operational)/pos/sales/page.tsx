@@ -28,8 +28,8 @@ interface PosSale {
   id: string;
   sale_code: string;
   created_at: string;
-  batch_id: string;
-  batch_code: string;
+  batch_id: string | null;
+  batch_code: string | null;
   species_name: string;
   fish_size: string | null;
   quantity: number;
@@ -127,11 +127,7 @@ export default function PosSalesPage() {
   if (!ready || !session || !canAccess) return <PageSkeleton />;
 
   function applyFilters() {
-    if (
-      startDateInput &&
-      endDateInput &&
-      startDateInput > endDateInput
-    ) {
+    if (startDateInput && endDateInput && startDateInput > endDateInput) {
       setFilterError("Tanggal akhir tidak boleh sebelum tanggal awal.");
       return;
     }

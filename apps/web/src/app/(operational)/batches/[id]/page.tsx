@@ -30,8 +30,22 @@ import {
   formatRupiah,
 } from "@/lib/format";
 import { ApiClientError, apiRequest } from "@/lib/api";
+import { SaleReadinessBadge } from "@/features/pos/v46-batch-readiness";
 
 type PendingVoid = { fingerprint: string; key: string };
+type BatchDetailItem = BatchItem & {
+  batch: BatchItem["batch"] & {
+    sale_readiness: "BELUM_SIAP" | "SIAP_JUAL";
+  };
+  sale_readiness_histories: Array<{
+    id: string;
+    from_readiness: "BELUM_SIAP" | "SIAP_JUAL" | null;
+    to_readiness: "BELUM_SIAP" | "SIAP_JUAL";
+    changed_by: { id: string; name: string };
+    note: string | null;
+    created_at: string;
+  }>;
+};
 
 export default function BatchDetailPage() {
   const params = useParams<{ id: string }>();
@@ -40,20 +54,23 @@ export default function BatchDetailPage() {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const voidAttempt = useRef<PendingVoid | null>(null);
-  const [detail, setDetail] = useState<BatchItem | null>(null);
+  const [detail, setDetail] = useState<BatchDetailItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
   const [reason, setReason] = useState("");
   const [voidError, setVoidError] = useState("");
   const [voiding, setVoiding] = useState(false);
+  const [readinessNote, setReadinessNote] = useState("");
+  const [readinessSaving, setReadinessSaving] = useState(false);
+  const [readinessError, setReadinessError] = useState("");
 
   useEffect(() => {
     if (!session || !batchId) return;
     let active = true;
     setLoading(true);
     setError("");
-    apiRequest<BatchItem>(`/batches/${encodeURIComponent(batchId)}`, {
+    apiRequest<BatchDetailItem>(`/batches/${encodeURIComponent(batchId)}`, {
       token: session.accessToken,
     })
       .then((response) => {
@@ -75,6 +92,43 @@ export default function BatchDetailPage() {
       active = false;
     };
   }, [batchId, reloadKey, session]);
+
+  const canChangeReadiness =
+    (session?.user.role === "Owner" ||
+      session?.user.role === "Kepala Budidaya") &&
+    detail?.batch.status === "active";
+
+  async function submitReadiness() {
+    if (!session || !detail || !canChangeReadiness || readinessSaving) return;
+    const nextReadiness =
+      detail.batch.sale_readiness === "SIAP_JUAL" ? "BELUM_SIAP" : "SIAP_JUAL";
+    setReadinessSaving(true);
+    setReadinessError("");
+    try {
+      await apiRequest(
+        `/batches/${encodeURIComponent(batchId)}/sale-readiness`,
+        {
+          method: "PATCH",
+          token: session.accessToken,
+          headers: { "Idempotency-Key": generateUuidV4() },
+          body: JSON.stringify({
+            saleReadiness: nextReadiness,
+            note: readinessNote.trim() || undefined,
+          }),
+        },
+      );
+      setReadinessNote("");
+      setReloadKey((value) => value + 1);
+    } catch (caught) {
+      setReadinessError(
+        caught instanceof ApiClientError
+          ? caught.message
+          : "Kesiapan jual belum dapat diperbarui.",
+      );
+    } finally {
+      setReadinessSaving(false);
+    }
+  }
 
   const canVoid =
     (session?.user.role === "Owner" ||
@@ -191,6 +245,9 @@ export default function BatchDetailPage() {
         <DetailValue label="Status batch">
           <StatusBadge status={detail.batch.status as BatchStatus} />
         </DetailValue>
+        <DetailValue label="Kesiapan jual">
+          <SaleReadinessBadge value={detail.batch.sale_readiness} />
+        </DetailValue>
         <DetailValue label="Stok saat ini">
           <span className="tabular-nums font-semibold">
             {formatInteger(detail.batch.current_stock)} ekor
@@ -275,6 +332,28 @@ export default function BatchDetailPage() {
           ) : null}
         </section>
       )}
+
+      {detail.sale_readiness_histories?.length ? (
+        <section className="mt-6 border-y border-border bg-white px-4 py-4">
+          <h2 className="text-sm font-bold text-marine">
+            Riwayat kesiapan jual
+          </h2>
+          <div className="mt-3 divide-y divide-border">
+            {detail.sale_readiness_histories.slice(0, 5).map((history) => (
+              <div key={history.id} className="py-2 text-sm text-slate-700">
+                <span className="font-semibold">
+                  {history.from_readiness ?? "Belum ada"} →{" "}
+                  {history.to_readiness}
+                </span>
+                {history.note ? <span> · {history.note}</span> : null}
+                <span className="ml-2 text-xs text-slate-500">
+                  {history.changed_by.name}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <dialog
         ref={dialogRef}

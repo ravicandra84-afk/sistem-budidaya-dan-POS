@@ -22,6 +22,7 @@ import {
 import { useAuth } from "@/features/auth/auth-provider";
 import { ApiClientError, apiRequest } from "@/lib/api";
 import { formatInteger, formatPosRupiah } from "@/lib/format";
+import { V46PosCatalog } from "@/features/pos/v46-pos-catalog";
 
 interface PosBatch {
   batch: {
@@ -87,6 +88,10 @@ function safeNumber(
 }
 
 export default function PosPage() {
+  return <V46PosCatalog />;
+}
+
+export function LegacyPosPage() {
   const { ready, session } = useAuth();
   const router = useRouter();
   const canAccess =

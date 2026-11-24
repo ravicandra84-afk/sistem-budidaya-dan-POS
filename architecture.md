@@ -390,8 +390,8 @@ Entitas induk kelompok ikan homogen (1 spesies, 1 ukuran).
 - `action`: `VARCHAR(50) NOT NULL` — pada migrasi Fase 7, constraint `CHECK` V4.5 diperbarui secara additive agar mencakup nilai V4.5 (`'CREATE_ENTRY'`, `'VOID_ENTRY'`) dan nilai POS (`'CREATE_SALE'`, `'VOID_SALE'`, `'CREATE_SALE_PRICE'`, `'UPDATE_SALE_PRICE'`) (`APPROVED — OWNER`, ADR 0002).
 - `entity_type`: `VARCHAR(50) NOT NULL`
 - `entity_id`: `UUID NOT NULL`
-- `old_values`: `JSONB NULLABLE` _(Untuk `CREATE_SALE_PRICE` dan `UPDATE_SALE_PRICE`, dibiarkan `NULL` sesuai keputusan audit ringkas `TBD-02`)_
-- `new_values`: `JSONB NULLABLE` _(Untuk `CREATE_SALE_PRICE` dan `UPDATE_SALE_PRICE`, dibiarkan `NULL` sesuai keputusan audit ringkas `TBD-02`)_
+- `old_values`: `JSONB NULLABLE` _(Dipertahankan demi kompatibilitas penuh dengan layanan V4.5 yang berjalan; untuk `CREATE_SALE_PRICE` dan `UPDATE_SALE_PRICE`, dibiarkan `NULL` sesuai keputusan audit ringkas `TBD-02`.)_
+- `new_values`: `JSONB NULLABLE` _(Dipertahankan demi kompatibilitas penuh dengan layanan V4.5 yang berjalan; untuk `CREATE_SALE_PRICE` dan `UPDATE_SALE_PRICE`, dibiarkan `NULL` sesuai keputusan audit ringkas `TBD-02`.)_
 - `reason`: `TEXT NULLABLE`
 - `ip_address`: `VARCHAR(45) NULLABLE`
 - `created_at`: `TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP`
@@ -495,7 +495,7 @@ Addendum ini memperluas POS setelah MVP. Aturan V4.5 dan trigger siklus hidup ba
 - `fish_sales` tetap append-only. Tambahkan `product_id` nullable FK ke `products` untuk menjaga data lama; transaksi baru wajib memiliki produk. Ubah `batch_id` menjadi nullable: wajib untuk `BATCH_TRACKED`, harus NULL untuk `NON_BATCH`.
 - Nomor harian `sale_daily_sequences` dan sembilan field struk resmi tetap dipertahankan. Harga katalog dua-desimal memerlukan snapshot nominal yang dapat menyimpan dua desimal; P8-01 harus melakukan migrasi tipe secara non-destruktif dengan mempertahankan nilai histori V4.5.
 - Untuk `BATCH_TRACKED`, pembuatan penjualan mengunci batch dengan `SELECT ... FOR UPDATE`, lalu memvalidasi ulang status aktif, kesiapan `SIAP_JUAL`, stok, harga, dan pembayaran sebelum insert. Untuk `NON_BATCH`, backend mengunci baris produk dan memvalidasi stok produk pada transaksi yang sama.
-- VOID tetap berupa reversal append-only. Pemulihan stok `NON_BATCH`, aturan jumlah desimal per unit, dan pemetaan identitas produk non-batch ke sembilan slot struk harus ditetapkan dan diuji di P8-02 sebelum backend dirilis.
+- VOID tetap berupa reversal append-only. Pemulihan stok `NON_BATCH` dan aturan jumlah desimal per unit harus ditetapkan dan diuji di P8-02 sebelum backend dirilis. Pemetaan struk mengikuti sembilan slot kanonis pada Bagian 7.2 dan response create-sale/cetak ulang harus identik.
 - Endpoint V4.6 untuk membuat penjualan adalah `POST /api/v1/sales`. Detail request/response, route katalog, audit action, idempotency, dan kompatibilitas dengan route V4.5 `/api/v1/pos/*` dikunci di P8-02; kontrak V4.5 tetap menjadi acuan bagi klien lama selama transisi.
 
 ## 5. Alur Data dan Mekanisme Transaksi Atomik
@@ -624,7 +624,8 @@ Pencetakan struk dijalankan sepenuhnya pada **sisi klien (Client-Side Printing)*
 2. **Jalur Baseline Multi-Platform (`APPROVED — OWNER`):** Browser print dengan layout CSS untuk lebar 58 mm dan 80 mm menjadi baseline melalui dialog cetak sistem tanpa driver/protokol printer khusus aplikasi. Target desktop mencakup Linux Pop!\_OS dan Windows; OS tetap mungkin memerlukan driver atau dukungan printer native sehingga ini bukan jaminan zero-driver universal. Perangkat mobile/tablet menggunakan dialog cetak sistem apabila didukung kombinasi OS, browser, dan printer. Direct ESC/POS Bluetooth, WebUSB, Web Serial, native wrapper, dan print bridge tidak termasuk baseline ADR 0002.
    - **Verifikasi fisik GPOS-04:** Merek/model printer dan kombinasi perangkat tetap harus diuji sebelum dukungan aktual diklaim. Keputusan arsitektur browser print telah disetujui; kompatibilitas perangkat tertentu belum diverifikasi.
 3. **Konten Struk & Otorisasi Cetak Ulang (`FR-PRINT-01` s.d. `FR-PRINT-05`):**
-   - Struk **hanya** mencetak 9 elemen: Nama Perusahaan (`Pisciculture Farm Indonesia`), Tanggal & Waktu, Spesies Ikan, Ukuran Ikan, Jumlah (`ekor`), Harga per Ekor, Total Pembayaran, Metode Pembayaran (`Tunai` / `Transfer`), dan Nama Kasir.
+   - Struk memiliki tepat sembilan slot berurutan: (1) Nama Perusahaan `PT. Pisciculture Farm Indonesia` (`company_name`); (2) Tanggal & Waktu Transaksi (`transaction_date_time`); (3) Jenis Ikan/Produk (`species_name` untuk `BATCH_TRACKED`, `product.name` untuk `NON_BATCH`); (4) Ukuran/Kode Varian (`fish_size` untuk `BATCH_TRACKED`, `product.sku` untuk `NON_BATCH`); (5) Jumlah dan unit produk (`quantity` + `unit`) sebagai satu slot; (6) Harga Satuan (`unit_price`); (7) Total Pembayaran (`total_price`); (8) Metode Pembayaran (`CASH` atau `TRANSFER`); dan (9) Nama Kasir (`cashier_name`). Tidak ada slot Kode Batch terpisah.
+   - Response penjualan baru dan cetak ulang wajib mengembalikan struktur sembilan slot dengan field, tipe, urutan, dan pemetaan yang identik.
    - **Dilarang mencetak:** Nomor penjualan internal (`PFI-SAL-...`), kode batch (`PFI-BCH-...`), data pelanggan, referensi transfer, maupun status/alasan VOID.
    - **Otorisasi Cetak Ulang:** Hanya dapat dijalankan oleh akun pembuat transaksi (`fish_sales.created_by == jwt.user_id`) dan hanya apabila transaksi belum memiliki catatan di `fish_sale_voids`.
 
@@ -654,3 +655,66 @@ Tabel berikut merangkum seluruh item `TBD` dari PRD/Blueprint beserta status ter
 | `TBD-08` | Pengelolaan & provisioning akun        | `PARTIALLY RESOLVED — OWNER` (ADR 0001) | Akun awal `Owner` lokal diprovision melalui CLI idempoten dari `.env`, tanpa registrasi publik dan tanpa mengubah akun yang sudah ada. Deaktivasi, perubahan role, reset password, dan administrasi akun tetap `TBD — NEEDS DECISION`. |
 | `TBD-09` | Pagination & filter daftar             | `APPROVED — OWNER` (ADR 0001)           | `page=1`, `limit=20`, maksimum `100`; filter `startDate`/`endDate` ISO 8601 pada timestamp utama dan `status` hanya untuk enum resmi; urutan terbaru dahulu (`DESC`). Search dan arbitrary sort tidak termasuk keputusan ini.          |
 | `TBD-09` | Filter, pencarian, & pagination daftar | `TBD — NEEDS DECISION`                  | Parameter filter, sorting, dan pagination untuk daftar batch dan daftar penjualan perlu dikunci sebelum implementasi endpoint daftar.                                                                                                  |
+
+## Addendum Arsitektur V4.6 — Skema Database, Guardrails, & Concurrency
+
+### 1. Prinsip Kompatibilitas V4.5 -> V4.6
+
+- **Trigger Status Batch V4.5 Dipertahankan:** Kolom `batches.status` (`active`, `completed`, `voided`) beserta trigger `batches_status_transition_guard` **tidak diubah**. Kesiapan jual dipisahkan ke kolom `batches.sale_readiness` (`BELUM_SIAP` | `SIAP_JUAL`, default `BELUM_SIAP`).
+- **Tabel `fish_sales` Tetap Append-Only:** Trigger `fish_sales_immutable` dipertahankan. Kolom `total_amount` di-rename secara _in-place_ (non-destruktif) menjadi `total_price` bertipe `NUMERIC(14,2)`, kolom `product_id` ditambahkan (nullable untuk histori V4.5), dan `batch_id` diubah menjadi nullable (`NULL` khusus transaksi `NON_BATCH`).
+
+### 2. Spesifikasi Perubahan Tabel & Constraints
+
+1. **`batches` (Perluasan):**
+   - `sale_readiness`: Enum `SaleReadiness` (`BELUM_SIAP`, `SIAP_JUAL`), `NOT NULL DEFAULT 'BELUM_SIAP'`.
+2. **`batch_sale_readiness_histories` (Baru — Append-Only):**
+   - `id` (`UUID` PK), `batch_id` (`UUID` FK -> `batches.id`), `from_readiness` (`SaleReadiness` NULL), `to_readiness` (`SaleReadiness` NOT NULL), `changed_by` (`UUID` FK -> `users.id`), `note` (`VARCHAR(500)` NULL), `created_at` (`TIMESTAMPTZ` DEFAULT `now()`).
+   - Dilindungi trigger `batch_sale_readiness_histories_immutable` yang menolak `UPDATE` dan `DELETE`.
+3. **`product_categories` (Baru):**
+   - `id` (`UUID` PK), `name` (`VARCHAR(100)` UNIQUE), `code` (`VARCHAR(50)` UNIQUE), `requires_batch` (`BOOLEAN` NOT NULL), `is_active` (`BOOLEAN` DEFAULT `true`), `created_at`, `updated_at`.
+4. **`products` (Baru — Evolusi dari `fish_sale_prices`):**
+   - `id` (`UUID` PK), `category_id` (`UUID` FK -> `product_categories.id`), `sku` (`VARCHAR(64)` UNIQUE), `name` (`VARCHAR(150)` NOT NULL), `tracking_mode` (`ProductTrackingMode`: `BATCH_TRACKED` | `NON_BATCH`), `species` (`VARCHAR(100)` NULL), `size_label` (`VARCHAR(50)` NULL), `unit` (`VARCHAR(30)` NOT NULL), `unit_price` (`NUMERIC(12,2)` NOT NULL), `stock_quantity` (`NUMERIC(12,2)` NULL), `is_active` (`BOOLEAN` DEFAULT `true`), `created_at`, `updated_at`.
+   - **Check Constraint:**
+     - `unit_price > 0 AND unit_price <= 10000000`
+     - Jika `tracking_mode = 'BATCH_TRACKED'`: `species IS NOT NULL AND size_label IS NOT NULL AND stock_quantity IS NULL`
+     - Jika `tracking_mode = 'NON_BATCH'`: `species IS NULL AND size_label IS NULL AND stock_quantity IS NOT NULL AND stock_quantity >= 0`
+   - **Partial Unique Index:** `CREATE UNIQUE INDEX products_active_batch_species_size_key ON products (species, size_label) WHERE is_active = true AND tracking_mode = 'BATCH_TRACKED';`
+5. **Grants Role Runtime (`pfi_app_runtime`):**
+   - `SELECT, INSERT` pada `product_categories`, `products`, `batch_sale_readiness_histories`, `audit_logs`.
+   - `UPDATE` terbatas hanya pada kolom mutabel (`name`, `code`, `requires_batch`, `is_active`, `updated_at` pada `product_categories`; `category_id`, `sku`, `name`, `species`, `size_label`, `unit`, `unit_price`, `stock_quantity`, `is_active`, `updated_at` pada `products`; `sale_readiness` pada `batches`). Tanpa hak `DELETE`.
+
+### 3. Alur Penguncian Transaksi (`POST /api/v1/sales`)
+
+1. Kunci baris `products` (`SELECT ... FOR UPDATE`) dan validasi `is_active = true`.
+2. Jika `tracking_mode === 'BATCH_TRACKED'`:
+   - Validasi `batch_id` wajib ada; kunci baris `batches` (`SELECT ... FOR UPDATE`).
+   - Validasi `status = 'active'`, `sale_readiness = 'SIAP_JUAL'`, `species` & `size_label` cocok dengan produk, dan `current_stock >= quantity`.
+   - Kurangi `batches.current_stock` (jika menjadi `0`, transisi otomatis ke `completed` tetap mengikuti trigger V4.5).
+3. Jika `tracking_mode === 'NON_BATCH'`:
+   - Validasi `batch_id` tidak dikirim / `NULL`, dan `products.stock_quantity >= quantity`.
+   - Kurangi `products.stock_quantity`.
+4. Hitung `total_price = unit_price * quantity` (presisi `NUMERIC(14,2)`), generate nomor struk harian (`sale_daily_sequences`), simpan baris ke `fish_sales`, dan catat ke `audit_logs`.
+
+### Aturan Penyelarasan & Anti-Konflik V4.5 ↔ V4.6 (Wajib Dipatuhi)
+
+1. **Integritas Siklus Batch V4.5:**
+   - Trigger `batches_status_transition_guard` (`active` -> `completed` | `voided`) dan logika otomatis `current_stock == 0` -> `status = 'completed'` tetap berlaku mutlak.
+   - Gerbang jual kasir menggunakan kondisi majemuk wajib: `batches.status = 'active' AND batches.sale_readiness = 'SIAP_JUAL' AND batches.current_stock > 0`.
+   - Batch dengan status `completed` atau `voided` terkunci permanen dan tidak boleh diubah `sale_readiness`-nya (`422 BATCH_NOT_ACTIVE`).
+
+2. **Disiplin Tipe Kuantitas & Nominal:**
+   - Item `BATCH_TRACKED` (ikan): `quantity` wajib bilangan bulat (`INTEGER >= 1`), `unit_price` wajib bilangan bulat Rupiah (`> 0` dan `<= 10.000.000`).
+   - Item `NON_BATCH` (produk umum): `quantity` mendukung desimal hingga 2 angka di belakang koma (`NUMERIC(12,2) > 0`), `unit_price` maksimal `NUMERIC(12,2)` (`> 0` dan `<= 10.000.000`).
+   - Total transaksi `fish_sales.total_price` menggunakan `NUMERIC(14,2)` tanpa menghapus atau mengubah baris histori transaksi V4.5 (`fish_sales` tetap _append-only_).
+
+3. **Single Source of Truth Katalog:**
+   - Tabel `products` adalah satu-satunya sumber aktif harga dan katalog POS. Tabel lama `fish_sale_prices` dibekukan (_read-only_) hanya untuk referensi migrasi histori; seluruh endpoint harga (`/pos/prices` maupun `/pos/products`) membaca dan menulis ke `products`.
+
+4. **Integritas Audit Logs & Idempotency:**
+   - Kolom `old_values` dan `new_values` pada `audit_logs` tetap dipertahankan sebagai kolom opsional (`JSONB NULLABLE`) demi kompatibilitas penuh dengan layanan V4.5 yang sudah berjalan. Jejak detail perubahan `BELUM_SIAP` <-> `SIAP_JUAL` dicatat pada tabel khusus _append-only_ `batch_sale_readiness_histories`.
+   - Seluruh endpoint mutasi V4.6 (`PATCH /batches/:id/sale-readiness`, `POST/PATCH/DELETE /pos/products`, `POST/PATCH /pos/categories`) wajib memvalidasi header `Idempotency-Key` (UUIDv4) dan menggunakan zona waktu bisnis `Asia/Jakarta`.
+
+5. **Pemetaan Deterministik Struk Thermal 9 Field:**
+   - Jumlah dan urutan **9 field resmi struk** pada layar detail transaksi dan printer ESC/POS 58mm/80mm tidak boleh berubah.
+   - Untuk transaksi `NON_BATCH` (`batch_id = NULL`), slot Jenis Ikan/Produk memuat `product.name` dan slot Ukuran/Kode Varian memuat `product.sku`; tidak ada slot Kode Batch terpisah dan tidak boleh ada nilai `null`.
+   - Serializer response penjualan baru dan cetak ulang wajib identik untuk seluruh sembilan slot tersebut.
