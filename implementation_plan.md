@@ -1131,15 +1131,15 @@ Gate dinyatakan lulus hanya jika:
 
   ## V4.6 Release Gate Checklist (Sign-Off Wajib Sebelum Penutupan Phase 8)
 
-* [ ] **DB & Migrasi (`P8-01`):** `prisma migrate status` bersih, trigger V4.5 utuh, grants `pfi_app_runtime` lengkap untuk `products`, `product_categories`, `batch_sale_readiness_histories`, dan `audit_logs`.
-* [ ] **RBAC Lapangan (`P8-02` & `P8-03`):** `Kepala Budidaya` & `Owner` dapat mengubah `BELUM_SIAP` <-> `SIAP_JUAL` pada batch `active` dengan catatan, dan riwayat tercatat; `Admin Operasional` & `Kasir` mendapat `403` jika mencoba memutasi readiness.
-* [ ] **RBAC Katalog (`P8-02` & `P8-03`):** `Admin Operasional` & `Owner` dapat menambah, mengedit harga/stok, dan mengarsipkan (`is_active = false`) produk `BATCH_TRACKED` maupun `NON_BATCH`.
-* [ ] **Kasir POS Siap Jual (`P8-02` & `P8-03`):**
-  - [ ] Batch `BELUM_SIAP` tidak muncul dan ditolak (`422`) saat checkout.
-  - [ ] Produk `BATCH_TRACKED` menampilkan stok gabungan batch `SIAP_JUAL` dan mewajibkan pemilihan batch spesifik (`quantity` integer).
-  - [ ] Produk `NON_BATCH` memotong `products.stock_quantity` dengan `batch_id = NULL`.
-* [ ] **Struk 9 Field & Bluetooth Print (`P8-03`):** Struk transaksi `BATCH_TRACKED` maupun `NON_BATCH` (fallback `product.sku`) tampil lengkap 9 field dan dapat dicetak via Web Bluetooth ESC/POS tanpa error.
-* [ ] **Automated Quality Gate (`P8-04`):** `npm run typecheck`, `npm run build`, backend E2E (`pos-sales-api.e2e.spec.ts`), dan frontend E2E (`pos-*.spec.ts`) lulus 100%.
+* [x] **DB & Migrasi (`P8-01`):** `prisma migrate status` bersih, trigger V4.5 utuh, dan grants `pfi_app_runtime` lengkap untuk `products`, `product_categories`, `batch_sale_readiness_histories`, serta `audit_logs`. Grant kolom `batches.status` dipertahankan sebagai warisan sah V4.5 untuk transisi otomatis `active` -> `completed` saat stok hasil hitung habis, dikawal trigger `batches_status_transition_guard`; grant V4.6 untuk `sale_readiness` tetap terpisah.
+* [x] **RBAC Lapangan (`P8-02` & `P8-03`):** `Kepala Budidaya` & `Owner` dapat mengubah `BELUM_SIAP` <-> `SIAP_JUAL` pada batch `active` dengan catatan, dan riwayat tercatat; `Admin Operasional` & `Kasir` mendapat `403` jika mencoba memutasi readiness.
+* [x] **RBAC Katalog (`P8-02` & `P8-03`):** `Admin Operasional` & `Owner` dapat menambah, mengedit harga/stok, dan mengarsipkan (`is_active = false`) produk `BATCH_TRACKED` maupun `NON_BATCH`.
+* [x] **Kasir POS Siap Jual (`P8-02` & `P8-03`):**
+  - [x] Batch `BELUM_SIAP` tidak muncul dan ditolak (`422`) saat checkout.
+  - [x] Produk `BATCH_TRACKED` menampilkan stok gabungan batch `SIAP_JUAL` dan mewajibkan pemilihan batch spesifik (`quantity` integer).
+  - [x] Produk `NON_BATCH` memotong `products.stock_quantity` dengan `batch_id = NULL`.
+* [x] **Struk 9 Field & Bluetooth Print (`P8-03`):** Struk transaksi `BATCH_TRACKED` maupun `NON_BATCH` (fallback `product.sku`) tampil lengkap 9 field dan dapat dicetak via Web Bluetooth ESC/POS tanpa error.
+* [x] **Automated Quality Gate (`P8-04`):** `npm run typecheck`, `npm run build`, backend E2E (`pos-sales-api.e2e.spec.ts`), dan frontend E2E (`pos-*.spec.ts`) lulus 100%.
 
 ## P8-AUDIT — Audit Kepatuhan Kode V4.6 (**SELESAI**)
 
@@ -1173,8 +1173,10 @@ Gate dinyatakan lulus hanya jika:
 
 **Status:** `DONE` — 2026-11-24. Panel kontrol kesiapan jual dan tabel histori lengkap tersedia; manajemen kategori mendukung tambah, ubah, dan arsip/aktifkan; kasir menerima quantity `NON_BATCH` hingga dua desimal dan receipt menampilkan quantity bersama unit. Typecheck web lulus; build web lulus dengan `NODE_ENV=production`.
 
-### P8-FIX-05 — Migrasi E2E Playwright (**ACTIVE**)
+### P8-FIX-05 — Migrasi E2E Playwright (**DONE**)
 
 **Dependency:** P8-FIX-04 selesai.
 
 **Scope:** migrasikan seluruh `apps/web/e2e/pos-*.spec.ts` ke kontrak V4.6, tambahkan test kesiapan jual dan kuantitas pecahan `NON_BATCH`, lalu pastikan seluruh suite POS lulus tanpa test di-skip.
+
+**Status:** `DONE` — 2026-11-24. POS E2E 34/34 lulus tanpa skip; `batch-void.spec.ts` 6/6 lulus termasuk transisi readiness `BELUM_SIAP` -> `SIAP_JUAL` dengan UUIDv4 dan catatan. Typecheck API/web dan build web production lulus. Checklist release menyisakan blocker grant `UPDATE(batches.status)` di luar scope task ini.

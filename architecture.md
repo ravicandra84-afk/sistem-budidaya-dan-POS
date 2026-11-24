@@ -144,7 +144,7 @@ Sistem mengenali empat role utama: `Owner`, `Admin Operasional`, `Kepala Budiday
 
 ### 3.2.1 Tambahan RBAC V4.6 (`APPROVED — OWNER`)
 
-- `Kepala Budidaya` dan `Owner` boleh mengubah `batches.sale_readiness` ke atau dari `BELUM_SIAP`/`SIAP_JUAL`. Hak ini tidak mengizinkan perubahan `batches.status`.
+- `Kepala Budidaya` dan `Owner` boleh mengubah `batches.sale_readiness` ke atau dari `BELUM_SIAP`/`SIAP_JUAL`. Hak ini tidak memberi aksi manual untuk mengubah `batches.status`; grant kolom `status` tetap dipertahankan sebagai warisan sah V4.5 untuk transisi otomatis `active` -> `completed` saat stok hasil hitung habis, yang dikawal trigger `batches_status_transition_guard`.
 - Owner dan `Admin Operasional` boleh mengelola kategori/produk POS, termasuk menambah, mengubah, dan mengarsipkan melalui `is_active = false`. Istilah Admin pada keputusan V4.6 dipetakan ke role aktif `Admin Operasional`; tidak ada role baru.
 - Seluruh otorisasi wajib ditegakkan backend berdasarkan JWT terverifikasi. Runtime database hanya memperoleh privilege kolom minimum yang dibutuhkan.
 
@@ -156,7 +156,7 @@ Arsitektur database memisahkan dua peran koneksi PostgreSQL:
 2. **App Runtime Role (DML Granular):** Digunakan oleh layanan backend saat runtime dengan hak akses terbatas:
    - **Tabel Append-Only:** `incoming_fish`, `incoming_fish_voids`, `audit_logs`, `fish_sales`, `fish_sale_voids`, dan `batch_sale_readiness_histories` hanya memiliki hak `SELECT` dan `INSERT`; hak `UPDATE` dan `DELETE` dicabut.
    - **Proteksi Trigger:** Trigger `BEFORE UPDATE OR DELETE` dipasang pada seluruh tabel append-only untuk melemparkan `EXCEPTION` apabila ada upaya modifikasi atau penghapusan baris historis dari jalur koneksi mana pun.
-   - **Tabel Sequence, Katalog & Status Terkendali:** `batch_daily_sequences` memiliki `SELECT`, `INSERT`, dan `UPDATE` terbatas pada `last_number`; pada V4.6, `batches` menambah grant UPDATE kolom `sale_readiness` terpisah dari `status`. `product_categories` dan `products` menerima grants granular sesuai aksi katalog. `idempotency_keys` hanya dapat di-`UPDATE` pada `status`, `response_status`, `response_body`, dan `completed_at`. Grants final ditetapkan pada P8-01.
+   - **Tabel Sequence, Katalog & Status Terkendali:** `batch_daily_sequences` memiliki `SELECT`, `INSERT`, dan `UPDATE` terbatas pada `last_number`. Grant UPDATE kolom `batches.status` dipertahankan sebagai warisan sah V4.5 untuk transisi otomatis `active` -> `completed` saat stok hasil hitung habis; trigger `batches_status_transition_guard` mengawalnya. Pada V4.6, `batches` mendapat grant UPDATE kolom `sale_readiness` secara terpisah; endpoint readiness tidak mengubah `status`. `product_categories` dan `products` menerima grants granular sesuai aksi katalog. `idempotency_keys` hanya dapat di-`UPDATE` pada `status`, `response_status`, `response_body`, dan `completed_at`. Grants final ditetapkan pada P8-01.
 
 ---
 

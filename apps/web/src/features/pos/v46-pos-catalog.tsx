@@ -352,7 +352,8 @@ export function V46PosCatalog() {
                     <span className="text-sm font-bold tabular-nums">
                       {product.tracking_mode === "BATCH_TRACKED"
                         ? formatInteger(product.stock_quantity)
-                        : formatQuantity(product.stock_quantity)} {product.unit}
+                        : formatQuantity(product.stock_quantity)}{" "}
+                      {product.unit}
                     </span>
                   </div>
                 </button>
@@ -413,7 +414,8 @@ export function V46PosCatalog() {
                       <p className="mt-1 font-bold tabular-nums text-marine">
                         {selectedProduct.tracking_mode === "BATCH_TRACKED"
                           ? formatInteger(availableStock)
-                          : formatQuantity(availableStock)} {selectedProduct.unit}
+                          : formatQuantity(availableStock)}{" "}
+                        {selectedProduct.unit}
                       </p>
                     </div>
                     <div>
@@ -435,9 +437,17 @@ export function V46PosCatalog() {
                     <Input
                       id="pos-quantity"
                       type="number"
-                      min={selectedProduct.tracking_mode === "BATCH_TRACKED" ? 1 : 0.01}
+                      min={
+                        selectedProduct.tracking_mode === "BATCH_TRACKED"
+                          ? 1
+                          : 0.01
+                      }
                       max={availableStock || undefined}
-                      step={selectedProduct.tracking_mode === "BATCH_TRACKED" ? 1 : "0.01"}
+                      step={
+                        selectedProduct.tracking_mode === "BATCH_TRACKED"
+                          ? 1
+                          : "0.01"
+                      }
                       value={quantity}
                       onChange={(event) => setQuantity(event.target.value)}
                     />

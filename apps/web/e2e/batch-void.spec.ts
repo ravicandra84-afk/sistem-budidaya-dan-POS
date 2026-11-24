@@ -11,11 +11,34 @@ type CapturedVoid = {
   authorization: string | undefined;
 };
 
+type CapturedReadiness = {
+  path: string;
+  method: string;
+  payload: { saleReadiness: string; note?: string };
+  idempotencyKey: string | undefined;
+};
+
 async function mockApi(page: Page, role: Role, initialStatus = "active") {
   const state: {
     detailReads: number;
     voidRequest: CapturedVoid | null;
-  } = { detailReads: 0, voidRequest: null };
+    readiness: "BELUM_SIAP" | "SIAP_JUAL";
+    readinessHistories: Array<{
+      id: string;
+      from_readiness: "BELUM_SIAP" | "SIAP_JUAL" | null;
+      to_readiness: "BELUM_SIAP" | "SIAP_JUAL";
+      changed_by: { id: string; name: string };
+      note: string | null;
+      created_at: string;
+    }>;
+    readinessRequest: CapturedReadiness | null;
+  } = {
+    detailReads: 0,
+    voidRequest: null,
+    readiness: "BELUM_SIAP",
+    readinessHistories: [],
+    readinessRequest: null,
+  };
 
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
@@ -40,6 +63,7 @@ async function mockApi(page: Page, role: Role, initialStatus = "active") {
               status: voided ? "voided" : initialStatus,
               current_stock: voided ? 0 : 500,
               created_at: "2026-11-17T03:00:00.000Z",
+              sale_readiness: state.readiness,
             },
             species: {
               id: "c2c2c2c2-c2c2-42c2-82c2-c2c2c2c2c2c2",
@@ -57,7 +81,46 @@ async function mockApi(page: Page, role: Role, initialStatus = "active") {
               created_at: "2026-11-17T03:00:00.000Z",
               voided,
             },
+            sale_readiness_histories: state.readinessHistories,
           },
+        }),
+      });
+      return;
+    }
+
+    if (
+      url.pathname === `/api/v1/batches/${batchId}/sale-readiness` &&
+      request.method() === "PATCH"
+    ) {
+      const payload = request.postDataJSON() as CapturedReadiness["payload"];
+      const headers = request.headers();
+      const previousReadiness = state.readiness;
+      state.readiness = payload.saleReadiness as "BELUM_SIAP" | "SIAP_JUAL";
+      state.readinessRequest = {
+        path: url.pathname,
+        method: request.method(),
+        payload,
+        idempotencyKey: headers["idempotency-key"],
+      };
+      state.readinessHistories = [
+        {
+          id: "d5d5d5d5-d5d5-45d5-85d5-d5d5d5d5d5d5",
+          from_readiness: previousReadiness,
+          to_readiness: state.readiness,
+          changed_by: { id: "e2e-user", name: "Kepala Budidaya E2E" },
+          note: payload.note ?? null,
+          created_at: "2026-11-24T03:00:00.000Z",
+        },
+        ...state.readinessHistories,
+      ];
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          status: "success",
+          message: "Kesiapan jual berhasil diperbarui.",
+          data: { batch_id: batchId, sale_readiness: state.readiness },
+          meta: { idempotency_status: "executed", request_id: "e2e-request" },
         }),
       });
       return;
@@ -155,6 +218,45 @@ test("hides VOID action when the batch is not active", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "VOID penerimaan", exact: true }),
   ).toHaveCount(0);
+});
+
+test("Kepala Budidaya marks a batch sale-ready with a note and history", async ({
+  page,
+}) => {
+  const api = await openBatchDetail(page, "Kepala Budidaya");
+  await expect(
+    page.getByRole("heading", { name: "Kontrol Kesiapan Jual POS" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Tandai SIAP_JUAL" }),
+  ).toBeVisible();
+
+  await page
+    .getByLabel("Catatan perubahan (opsional)")
+    .fill("Stok dan ukuran batch sudah diverifikasi");
+  await page.getByRole("button", { name: "Tandai SIAP_JUAL" }).click();
+
+  const historyRow = page
+    .getByRole("row")
+    .filter({ hasText: "Stok dan ukuran batch sudah diverifikasi" });
+  await expect(historyRow).toContainText("BELUM_SIAP");
+  await expect(historyRow).toContainText("SIAP_JUAL");
+  await expect(historyRow).toContainText("Kepala Budidaya E2E");
+  await expect(
+    page.getByRole("button", { name: "Tarik ke BELUM_SIAP" }),
+  ).toBeVisible();
+
+  expect(api.readinessRequest).toMatchObject({
+    path: `/api/v1/batches/${batchId}/sale-readiness`,
+    method: "PATCH",
+    payload: {
+      saleReadiness: "SIAP_JUAL",
+      note: "Stok dan ukuran batch sudah diverifikasi",
+    },
+  });
+  expect(api.readinessRequest?.idempotencyKey).toMatch(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+  );
 });
 
 test("validates reason, sends UUIDv4 idempotency, and refreshes the voided batch", async ({

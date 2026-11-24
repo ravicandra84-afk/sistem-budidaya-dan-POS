@@ -11,6 +11,7 @@ const receipt = {
   species_name: "Ikan Nila",
   fish_size: "3-5 cm",
   quantity: 2,
+  unit: "EKOR",
   unit_price: 2500,
   total_payment: 5000,
   payment_method: "cash",
@@ -170,36 +171,39 @@ async function setKasirSession(page: Page, userId = "kasir-actor") {
 
 async function stubCashierSale(page: Page) {
   let postCount = 0;
-  await page.route("**/api/v1/pos/batches**", async (route: Route) => {
-    const url = new URL(route.request().url());
-    const batch = {
-      batch: {
-        id: batchId,
-        batch_code: "BATCH-PRINT-001",
-        status: "active",
-        current_stock: 20,
-      },
-      species: {
-        id: "44444444-4444-4444-8444-444444444444",
-        species_code: "NIL",
-        species_name: "Ikan Nila",
-      },
-      fish_size: "3-5 cm",
-      unit_price: 2500,
-    };
-    const data = url.pathname.endsWith("/batches")
-      ? {
-          items: [batch],
-          pagination: { page: 1, limit: 100, totalItems: 1, totalPages: 1 },
-        }
-      : batch;
+  await page.route("**/api/v1/pos/catalog", async (route: Route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(successEnvelope(data)),
+      body: JSON.stringify(
+        successEnvelope({
+          items: [
+            {
+              id: "77777777-7777-4777-8777-777777777777",
+              sku: "NILA-35",
+              name: "Ikan Nila 3-5 cm",
+              tracking_mode: "BATCH_TRACKED",
+              species: "Ikan Nila",
+              size_label: "3-5 cm",
+              unit: "EKOR",
+              unit_price: 2500,
+              stock_quantity: 20,
+              batches: [
+                {
+                  id: batchId,
+                  batch_code: "BATCH-PRINT-001",
+                  current_stock: 20,
+                  species_name: "Ikan Nila",
+                  size_label: "3-5 cm",
+                },
+              ],
+            },
+          ],
+        }),
+      ),
     });
   });
-  await page.route("**/api/v1/pos/sales", async (route) => {
+  await page.route("**/api/v1/sales", async (route) => {
     if (route.request().method() === "POST") {
       postCount += 1;
       await route.fulfill({
@@ -219,11 +223,10 @@ async function stubCashierSale(page: Page) {
     .getByRole("button", { name: "Pilih batch BATCH-PRINT-001" })
     .click();
   await page.getByLabel("Jumlah ikan (ekor)").fill("2");
-  await page.getByLabel("Saya mengonfirmasi harga terbaru").check();
-  await page.getByLabel("Uang diterima (Rp)").fill("5000");
+  await page.getByLabel("Uang diterima").fill("5000");
   await page.getByRole("button", { name: "Simpan penjualan" }).click();
   await expect(
-    page.getByRole("heading", { name: "Penjualan berhasil disimpan" }),
+    page.getByRole("heading", { name: "Penjualan berhasil" }),
   ).toBeVisible();
   return {
     get postCount() {
@@ -355,7 +358,7 @@ test("print failure leaves sale successful and retry never posts a second sale",
     "Transaksi penjualan berhasil tersimpan",
   );
   await expect(
-    page.getByRole("heading", { name: "Penjualan berhasil disimpan" }),
+    page.getByRole("heading", { name: "Penjualan berhasil" }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Coba Cetak Ulang" }),
@@ -367,7 +370,7 @@ test("print failure leaves sale successful and retry never posts a second sale",
   await expect.poll(() => printCallCount(page)).toBe(2);
   expect(api.postCount).toBe(1);
   await expect(
-    page.getByRole("heading", { name: "Penjualan berhasil disimpan" }),
+    page.getByRole("heading", { name: "Penjualan berhasil" }),
   ).toBeVisible();
 });
 
@@ -411,7 +414,7 @@ test("detail reprint loads the existing receipt and local print retry does not m
       body: JSON.stringify(successEnvelope(receipt)),
     });
   });
-  await page.route("**/api/v1/pos/sales", async (route) => {
+  await page.route("**/api/v1/sales", async (route) => {
     if (route.request().method() === "POST") salePostCount += 1;
     await route.continue();
   });

@@ -285,7 +285,10 @@ export default function BatchDetailPage() {
                 onClick={() => void submitReadiness()}
               >
                 {readinessSaving ? (
-                  <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+                  <LoaderCircle
+                    className="size-4 animate-spin"
+                    aria-hidden="true"
+                  />
                 ) : (
                   <CheckCircle2 className="size-4" aria-hidden="true" />
                 )}
@@ -391,11 +394,21 @@ export default function BatchDetailPage() {
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="bg-[#edf2f6] text-xs font-bold uppercase text-slate-600">
               <tr>
-                <th scope="col" className="px-4 py-3">Waktu</th>
-                <th scope="col" className="px-4 py-3">Dari Status</th>
-                <th scope="col" className="px-4 py-3">Ke Status</th>
-                <th scope="col" className="px-4 py-3">Diubah Oleh</th>
-                <th scope="col" className="px-4 py-3">Catatan</th>
+                <th scope="col" className="px-4 py-3">
+                  Waktu
+                </th>
+                <th scope="col" className="px-4 py-3">
+                  Dari Status
+                </th>
+                <th scope="col" className="px-4 py-3">
+                  Ke Status
+                </th>
+                <th scope="col" className="px-4 py-3">
+                  Diubah Oleh
+                </th>
+                <th scope="col" className="px-4 py-3">
+                  Catatan
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -419,7 +432,10 @@ export default function BatchDetailPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-500">
+                  <td
+                    colSpan={5}
+                    className="px-4 py-6 text-center text-sm text-slate-500"
+                  >
                     Belum ada perubahan kesiapan jual.
                   </td>
                 </tr>

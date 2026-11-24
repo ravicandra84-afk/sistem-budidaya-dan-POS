@@ -88,6 +88,17 @@ function safeNumber(
 }
 
 export default function PosPage() {
+  const { ready, session } = useAuth();
+  const router = useRouter();
+  const canAccess =
+    session !== null &&
+    allowedRoles.includes(session.user.role as (typeof allowedRoles)[number]);
+
+  useEffect(() => {
+    if (ready && session && !canAccess) router.replace("/batches");
+  }, [canAccess, ready, router, session]);
+
+  if (!ready || !session || !canAccess) return <PageSkeleton />;
   return <V46PosCatalog />;
 }
 

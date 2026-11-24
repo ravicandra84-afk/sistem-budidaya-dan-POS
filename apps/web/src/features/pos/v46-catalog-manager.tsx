@@ -148,7 +148,9 @@ export function V46CatalogManager() {
     const name = categoryForm.name.trim();
     const code = categoryForm.code.trim().toUpperCase();
     if (!name || !/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/.test(code)) {
-      setCategoryError("Nama wajib diisi dan kode harus berformat HURUF-ANGKA.");
+      setCategoryError(
+        "Nama wajib diisi dan kode harus berformat HURUF-ANGKA.",
+      );
       return;
     }
 
@@ -189,7 +191,11 @@ export function V46CatalogManager() {
     if (!session || !canManage || categorySaving) return;
     const nextActive = !category.is_active;
     const action = nextActive ? "aktifkan" : "arsipkan";
-    if (!window.confirm(`${action[0]?.toUpperCase()}${action.slice(1)} kategori ${category.name}?`)) {
+    if (
+      !window.confirm(
+        `${action[0]?.toUpperCase()}${action.slice(1)} kategori ${category.name}?`,
+      )
+    ) {
       return;
     }
     setCategorySaving(true);
@@ -247,8 +253,7 @@ export function V46CatalogManager() {
       unitPrice <= 0 ||
       unitPrice > 10_000_000 ||
       Math.abs(unitPrice * 100 - Math.round(unitPrice * 100)) >= 1e-8 ||
-      (form.tracking_mode === "BATCH_TRACKED" &&
-        !Number.isInteger(unitPrice))
+      (form.tracking_mode === "BATCH_TRACKED" && !Number.isInteger(unitPrice))
     ) {
       setActionError(
         form.tracking_mode === "BATCH_TRACKED"
@@ -384,11 +389,13 @@ export function V46CatalogManager() {
             onChange={(event) => setCategoryFilter(event.target.value)}
           >
             <option value="">Semua kategori</option>
-            {categories.filter((category) => category.is_active).map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
+            {categories
+              .filter((category) => category.is_active)
+              .map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
           </Select>
         </Field>
         <Button
@@ -489,7 +496,10 @@ export function V46CatalogManager() {
             </div>
           ) : null}
           {categoryError && !categoryEditorOpen ? (
-            <p className="border-b border-border px-4 py-3 text-sm text-danger" role="alert">
+            <p
+              className="border-b border-border px-4 py-3 text-sm text-danger"
+              role="alert"
+            >
               {categoryError}
             </p>
           ) : null}
@@ -497,20 +507,38 @@ export function V46CatalogManager() {
             <table className="w-full min-w-[640px] text-left text-sm">
               <thead className="bg-[#edf2f6] text-xs font-bold uppercase text-slate-600">
                 <tr>
-                  <th scope="col" className="px-4 py-3">Kategori</th>
-                  <th scope="col" className="px-4 py-3">Kode</th>
-                  <th scope="col" className="px-4 py-3">Pelacakan</th>
-                  <th scope="col" className="px-4 py-3">Status</th>
-                  <th scope="col" className="px-4 py-3 text-right">Aksi</th>
+                  <th scope="col" className="px-4 py-3">
+                    Kategori
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Kode
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Pelacakan
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Status
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right">
+                    Aksi
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {categories.map((category) => (
                   <tr key={category.id}>
-                    <td className="px-4 py-3 font-semibold text-marine">{category.name}</td>
-                    <td className="px-4 py-3 font-mono text-xs">{category.code}</td>
-                    <td className="px-4 py-3">{category.requires_batch ? "Batch" : "Non-batch"}</td>
-                    <td className="px-4 py-3">{category.is_active ? "Aktif" : "Diarsipkan"}</td>
+                    <td className="px-4 py-3 font-semibold text-marine">
+                      {category.name}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs">
+                      {category.code}
+                    </td>
+                    <td className="px-4 py-3">
+                      {category.requires_batch ? "Batch" : "Non-batch"}
+                    </td>
+                    <td className="px-4 py-3">
+                      {category.is_active ? "Aktif" : "Diarsipkan"}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
                         <Button
@@ -537,7 +565,10 @@ export function V46CatalogManager() {
                 ))}
                 {!loading && categories.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
+                    <td
+                      colSpan={5}
+                      className="px-4 py-6 text-center text-slate-500"
+                    >
                       Belum ada kategori produk.
                     </td>
                   </tr>
@@ -654,11 +685,13 @@ export function V46CatalogManager() {
                     }))
                   }
                 >
-                  {categories.filter((category) => category.is_active).map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
+                  {categories
+                    .filter((category) => category.is_active)
+                    .map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
                 </Select>
               </Field>
               <Field id="product-mode" label="Mode pelacakan">

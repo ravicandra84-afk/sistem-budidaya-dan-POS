@@ -13,6 +13,7 @@ const officialReceipt = {
   species_name: "Ikan Nila",
   fish_size: "3-5 cm",
   quantity: 5,
+  unit: "EKOR",
   unit_price: 3000,
   total_payment: 15000,
   payment_method: "cash",
