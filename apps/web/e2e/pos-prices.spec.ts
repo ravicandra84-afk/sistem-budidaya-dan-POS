@@ -20,6 +20,7 @@ interface Product {
   tracking_mode: TrackingMode;
   species: string | null;
   size_label: string | null;
+  variant_label?: string | null;
   unit: string;
   unit_price: number;
   stock_quantity: number | null;
@@ -29,6 +30,7 @@ interface Product {
 const batchCategoryId = "11111111-1111-4111-8111-111111111111";
 const generalCategoryId = "22222222-2222-4222-8222-222222222222";
 const newCategoryId = "33333333-3333-4333-8333-333333333333";
+const equipmentCategoryId = "55555555-5555-4555-8555-555555555555";
 const productId = "44444444-4444-4444-8444-444444444444";
 
 function successEnvelope(data: unknown) {
@@ -87,6 +89,7 @@ async function stubCatalog(page: Page, options: { products?: Product[] } = {}) {
   const categoryWrites: Array<Record<string, unknown>> = [];
   const productWrites: Array<Record<string, unknown>> = [];
   const idempotencyKeys: string[] = [];
+  let createdCategoryCount = 0;
 
   await page.route("**/api/v1/pos/categories**", async (route) => {
     const request = route.request();
@@ -113,7 +116,7 @@ async function stubCatalog(page: Page, options: { products?: Product[] } = {}) {
     idempotencyKeys.push(request.headers()["idempotency-key"] ?? "");
     if (request.method() === "POST") {
       const created: Category = {
-        id: newCategoryId,
+        id: createdCategoryCount++ === 0 ? newCategoryId : equipmentCategoryId,
         name: String(body.name),
         code: String(body.code),
         requires_batch: Boolean(body.requires_batch),
@@ -172,6 +175,7 @@ async function stubCatalog(page: Page, options: { products?: Product[] } = {}) {
         tracking_mode: body.tracking_mode as TrackingMode,
         species: body.species as string | null,
         size_label: body.size_label as string | null,
+        variant_label: (body.variant_label as string | null) ?? null,
         unit: String(body.unit),
         unit_price: Number(body.unit_price),
         stock_quantity: body.stock_quantity as number | null,
@@ -218,22 +222,19 @@ for (const role of ["Owner", "Admin Operasional"] as const) {
     ).toBeVisible();
 
     await page.getByRole("button", { name: "Tambah kategori" }).click();
-    await page.getByLabel("Nama kategori").fill("Peralatan kolam");
-    await page.getByLabel("Kode").fill("PERALATAN-KOLAM");
-    await page.getByLabel("Kategori memerlukan pelacakan batch").check();
+    await page.getByLabel("Nama kategori").fill("Pakan");
+    await page.getByLabel("Kode").fill("PAKAN");
     await page.getByRole("button", { name: "Simpan kategori" }).click();
-    const newCategoryRow = page
-      .getByRole("row")
-      .filter({ hasText: "Peralatan kolam" });
-    await expect(newCategoryRow).toContainText("Batch");
+    const newCategoryRow = page.getByRole("row").filter({ hasText: "Pakan" });
+    await expect(newCategoryRow).toContainText("Non-batch");
 
     await newCategoryRow.getByRole("button", { name: "Ubah" }).click();
-    await page.getByLabel("Nama kategori").fill("Peralatan budidaya");
-    await page.getByLabel("Kategori memerlukan pelacakan batch").uncheck();
+    await page.getByLabel("Nama kategori").fill("Obat Ikan");
+    await page.getByLabel("Kode").fill("OBAT-IKAN");
     await page.getByRole("button", { name: "Simpan kategori" }).click();
     const updatedCategoryRow = page
       .getByRole("row")
-      .filter({ hasText: "Peralatan budidaya" });
+      .filter({ hasText: "Obat Ikan" });
     await expect(updatedCategoryRow).toContainText("Non-batch");
 
     page.on("dialog", (dialog) => dialog.accept());
@@ -241,6 +242,14 @@ for (const role of ["Owner", "Admin Operasional"] as const) {
     await expect(updatedCategoryRow).toContainText("Diarsipkan");
     await updatedCategoryRow.getByRole("button", { name: "Aktifkan" }).click();
     await expect(updatedCategoryRow).toContainText("Aktif");
+
+    await page.getByRole("button", { name: "Tambah kategori" }).click();
+    await page.getByLabel("Nama kategori").fill("Peralatan Perikanan");
+    await page.getByLabel("Kode").fill("PERALATAN-PERIKANAN");
+    await page.getByRole("button", { name: "Simpan kategori" }).click();
+    await expect(
+      page.getByRole("row").filter({ hasText: "Peralatan Perikanan" }),
+    ).toContainText("Non-batch");
 
     await page.getByRole("button", { name: "Tambah produk" }).click();
     await page.locator("#product-category").selectOption(generalCategoryId);
@@ -282,8 +291,8 @@ for (const role of ["Owner", "Admin Operasional"] as const) {
     await productRow.getByRole("button", { name: "Arsip" }).click();
     await expect(page.getByText("Produk tidak ditemukan")).toBeVisible();
     expect(api.productWrites).toHaveLength(3);
-    expect(api.categoryWrites).toHaveLength(4);
-    expect(api.idempotencyKeys).toHaveLength(7);
+    expect(api.categoryWrites).toHaveLength(5);
+    expect(api.idempotencyKeys).toHaveLength(8);
     expect(
       api.idempotencyKeys.every((key) =>
         /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -291,9 +300,57 @@ for (const role of ["Owner", "Admin Operasional"] as const) {
         ),
       ),
     ).toBe(true);
-    expect(new Set(api.idempotencyKeys).size).toBe(7);
+    expect(new Set(api.idempotencyKeys).size).toBe(8);
   });
 }
+
+test("normalizes batch species and size before creating a catalog product", async ({
+  page,
+}) => {
+  const api = await stubCatalog(page);
+  await setRoleSession(page, "Owner");
+  await page.goto("/pos/prices");
+
+  await page.getByRole("button", { name: "Tambah produk" }).click();
+  await expect(page.locator("#product-species")).toHaveAttribute(
+    "list",
+    "batch-species-options",
+  );
+  await expect(page.locator("#product-size")).toHaveAttribute(
+    "list",
+    "batch-size-options",
+  );
+  await expect(page.locator("#batch-species-options option")).toHaveCount(4);
+  await expect(page.locator("#batch-size-options option")).toHaveCount(8);
+
+  await page.getByLabel("SKU").fill("LELE-35-NORMALIZED");
+  await page.getByLabel("Nama produk").fill("Benih Lele");
+  await page.getByLabel("Jenis ikan").fill("  Lele   ");
+  await page.getByLabel("Ukuran ikan").fill("3 - 5 cm");
+  await page.getByLabel("Varian").fill("  Hitam  ");
+  await page.getByLabel("Harga satuan").fill("2500");
+  await page.getByRole("button", { name: "Simpan", exact: true }).click();
+
+  await expect(
+    page.getByRole("row").filter({ hasText: "LELE-35-NORMALIZED" }),
+  ).toBeVisible();
+  expect(api.productWrites).toHaveLength(1);
+  expect(api.productWrites[0]).toMatchObject({
+    tracking_mode: "BATCH_TRACKED",
+    species: "Lele",
+    size_label: "3-5 cm",
+    variant_label: "Hitam",
+  });
+
+  const productRow = page
+    .getByRole("row")
+    .filter({ hasText: "LELE-35-NORMALIZED" });
+  await productRow.getByRole("button", { name: "Edit" }).click();
+  await page.getByLabel("Varian").fill(" Merah ");
+  await page.getByRole("button", { name: "Simpan", exact: true }).click();
+  expect(api.productWrites[1]).toMatchObject({ variant_label: "Merah" });
+  await expect(productRow).toContainText("Varian: Merah");
+});
 
 for (const role of ["Kasir", "Kepala Budidaya"] as const) {
   test(`${role} cannot mutate V4.6 catalog`, async ({ page }) => {

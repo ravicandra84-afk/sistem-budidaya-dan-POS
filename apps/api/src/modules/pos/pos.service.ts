@@ -1,4 +1,5 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
+import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type {
   CreateSaleInput,
@@ -36,6 +37,8 @@ type LockedBatch = {
   fish_size: string;
 };
 
+type LockedSplitBatch = LockedBatch & { current_stock: bigint };
+
 type LockedProduct = {
   id: string;
   sku: string;
@@ -43,6 +46,7 @@ type LockedProduct = {
   tracking_mode: "BATCH_TRACKED" | "NON_BATCH";
   species: string | null;
   size_label: string | null;
+  variant_label: string | null;
   unit: string;
   unit_price: Prisma.Decimal;
   stock_quantity: Prisma.Decimal | null;
@@ -51,8 +55,23 @@ type LockedProduct = {
 };
 
 type SaleSequence = { last_number: bigint };
+type SaleGroupPageRow = {
+  group_id: string;
+  created_at: Date;
+  sale_ids: string[];
+  has_checkout_group: boolean;
+  total_items: bigint;
+};
 
 class ExistingIdempotencyKeyError extends Error {}
+
+function normalizeCatalogMatchValue(value: string | null | undefined): string {
+  return (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/\s*-\s*/g, "-");
+}
 
 const saleInclude = {
   batch: {
@@ -112,6 +131,22 @@ function formatReceiptDateTime(value: Date): string {
     hour12: false,
     timeZoneName: "short",
   }).format(value);
+}
+
+function nameWithVariant(
+  name: string | null,
+  variant: string | null,
+): string | null {
+  const normalizedVariant = variant?.trim();
+  return name && normalizedVariant ? `${name} ${normalizedVariant}` : name;
+}
+
+function normalizeSaleMatchValue(value: string | null): string {
+  return (value ?? "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .replace(/\s*-\s*/g, "-");
 }
 
 @Injectable()
@@ -228,7 +263,7 @@ export class PosService {
 
           const [product] = await transaction.$queryRaw<LockedProduct[]>`
             SELECT "product"."id", "product"."sku", "product"."name", "product"."tracking_mode",
-                   "product"."species", "product"."size_label", "product"."unit",
+                   "product"."species", "product"."size_label", "product"."variant_label", "product"."unit",
                    "product"."unit_price", "product"."stock_quantity",
                    "product"."is_active", "category"."is_active" AS category_is_active
             FROM "products" AS "product"
@@ -249,6 +284,17 @@ export class PosService {
               HttpStatus.UNPROCESSABLE_ENTITY,
               "PRODUCT_NOT_ACTIVE",
               "Produk atau kategori sudah tidak aktif.",
+            );
+          }
+
+          if (input.batch_allocations !== undefined) {
+            return this.createSplitBatchSale(
+              transaction,
+              actor,
+              input,
+              request,
+              product,
+              idempotencyRow.id,
             );
           }
 
@@ -316,8 +362,10 @@ export class PosService {
               );
             }
             if (
-              product.species !== batch.species_name ||
-              product.size_label !== batch.fish_size
+              normalizeCatalogMatchValue(product.species) !==
+                normalizeCatalogMatchValue(batch.species_name) ||
+              normalizeCatalogMatchValue(product.size_label) !==
+                normalizeCatalogMatchValue(batch.fish_size)
             ) {
               throw new ApiException(
                 HttpStatus.UNPROCESSABLE_ENTITY,
@@ -516,38 +564,361 @@ export class PosService {
     }
   }
 
+  private async createSplitBatchSale(
+    transaction: Prisma.TransactionClient,
+    actor: AuthenticatedUser,
+    input: CreateSaleInput,
+    request: RequestWithId,
+    product: LockedProduct,
+    idempotencyRowId: string,
+  ): Promise<CachedResponse> {
+    const allocations = input.batch_allocations ?? [];
+    if (
+      product.tracking_mode !== "BATCH_TRACKED" ||
+      allocations.length === 0 ||
+      input.batch_id != null
+    ) {
+      throw new ApiException(
+        HttpStatus.BAD_REQUEST,
+        "INVALID_PAYLOAD",
+        "batch_allocations hanya berlaku untuk produk BATCH_TRACKED dan tidak dapat digabung dengan batch_id.",
+      );
+    }
+
+    const requestedQuantity = allocations.reduce(
+      (total, allocation) => total + allocation.quantity,
+      0,
+    );
+    if (
+      !Number.isInteger(input.quantity) ||
+      requestedQuantity !== input.quantity ||
+      allocations.some((allocation) => allocation.quantity < 1) ||
+      new Set(allocations.map((allocation) => allocation.batch_id)).size !==
+        allocations.length
+    ) {
+      throw new ApiException(
+        HttpStatus.BAD_REQUEST,
+        "INVALID_PAYLOAD",
+        "Jumlah total harus sama dengan alokasi batch yang unik dan positif.",
+      );
+    }
+
+    const batchIds = allocations.map((allocation) => allocation.batch_id);
+    const lockedBatches = await transaction.$queryRaw<
+      LockedSplitBatch[]
+    >(Prisma.sql`
+      SELECT "batch"."id", "batch"."batch_code", "batch"."status",
+             "batch"."sale_readiness", "batch"."species_id",
+             "species"."species_name", "receipt"."fish_size",
+             "calculate_batch_stock"("batch"."id") AS current_stock
+      FROM "batches" AS "batch"
+      INNER JOIN "fish_species" AS "species"
+        ON "species"."id" = "batch"."species_id"
+      INNER JOIN "incoming_fish" AS "receipt"
+        ON "receipt"."batch_id" = "batch"."id"
+      WHERE "batch"."id" IN (${Prisma.join(
+        batchIds.map((batchId) => Prisma.sql`${batchId}::uuid`),
+      )})
+      ORDER BY "batch"."id"
+      FOR UPDATE OF "batch"
+    `);
+    const batchById = new Map(lockedBatches.map((batch) => [batch.id, batch]));
+    if (batchById.size !== allocations.length) {
+      throw new ApiException(
+        HttpStatus.NOT_FOUND,
+        "BATCH_NOT_FOUND",
+        "Satu atau lebih batch alokasi tidak ditemukan.",
+      );
+    }
+
+    for (const allocation of allocations) {
+      const batch = batchById.get(allocation.batch_id)!;
+      if (batch.status !== "active") {
+        throw new ApiException(
+          HttpStatus.CONFLICT,
+          "BATCH_NOT_ACTIVE",
+          "Semua batch alokasi harus berstatus active.",
+        );
+      }
+      if (batch.sale_readiness !== "SIAP_JUAL") {
+        throw new ApiException(
+          HttpStatus.CONFLICT,
+          "BATCH_NOT_READY",
+          "Semua batch alokasi harus berstatus SIAP_JUAL.",
+        );
+      }
+      if (
+        normalizeCatalogMatchValue(product.species) !==
+          normalizeCatalogMatchValue(batch.species_name) ||
+        normalizeCatalogMatchValue(product.size_label) !==
+          normalizeCatalogMatchValue(batch.fish_size)
+      ) {
+        throw new ApiException(
+          HttpStatus.BAD_REQUEST,
+          "INVALID_PAYLOAD",
+          "Setiap batch harus sesuai dengan spesies dan ukuran produk.",
+        );
+      }
+      const remainingStock = Number(batch.current_stock);
+      if (remainingStock < allocation.quantity) {
+        throw new ApiException(
+          HttpStatus.CONFLICT,
+          "INSUFFICIENT_STOCK",
+          "Stok salah satu batch tidak mencukupi alokasinya.",
+          { batch_id: batch.id, available_quantity: remainingStock },
+        );
+      }
+    }
+
+    const unitPrice = new Prisma.Decimal(product.unit_price);
+    if (!unitPrice.equals(input.expected_unit_price.toString())) {
+      throw new ApiException(
+        HttpStatus.CONFLICT,
+        "PRICE_CHANGED",
+        "Harga jual berubah. Perbarui dan konfirmasikan harga terbaru.",
+        { unit_price: unitPrice.toNumber() },
+      );
+    }
+    const quantity = new Prisma.Decimal(input.quantity.toString());
+    const totalPrice = unitPrice.mul(quantity).toDecimalPlaces(2);
+    if (totalPrice.greaterThan("999999999999.99")) {
+      throw new ApiException(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        "INVALID_PAYLOAD",
+        "Total pembayaran melebihi kapasitas kolom total_price.",
+      );
+    }
+    const cashReceived =
+      input.payment_method === "cash"
+        ? new Prisma.Decimal(input.cash_received.toString())
+        : null;
+    if (cashReceived !== null && cashReceived.lessThan(totalPrice)) {
+      throw new ApiException(
+        HttpStatus.BAD_REQUEST,
+        "INVALID_PAYLOAD",
+        "Uang diterima tidak boleh kurang dari total pembayaran.",
+      );
+    }
+    const changeAmount =
+      cashReceived === null
+        ? null
+        : cashReceived.minus(totalPrice).toDecimalPlaces(2);
+
+    const saleDate = currentJakartaDate();
+    await transaction.$executeRaw`
+      INSERT INTO "sale_daily_sequences" ("sale_date", "last_number")
+      VALUES (${saleDate}::date, 0)
+      ON CONFLICT ("sale_date") DO NOTHING
+    `;
+    const saleCount = BigInt(allocations.length);
+    const [sequence] = await transaction.$queryRaw<SaleSequence[]>`
+      UPDATE "sale_daily_sequences"
+      SET "last_number" = "last_number" + ${saleCount}
+      WHERE "sale_date" = ${saleDate}::date
+      RETURNING "last_number"
+    `;
+    if (!sequence) {
+      throw new ApiException(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        "INTERNAL_SERVER_ERROR",
+        "Nomor penjualan tidak dapat dialokasikan.",
+      );
+    }
+
+    const checkoutGroupId = randomUUID();
+    const firstNumber = sequence.last_number - saleCount + 1n;
+    const saleRows: Array<{ id: string; sale_code: string; created_at: Date }> =
+      [];
+    for (const [index, allocation] of allocations.entries()) {
+      const lineTotal = unitPrice
+        .mul(new Prisma.Decimal(allocation.quantity))
+        .toDecimalPlaces(2);
+      const lineChange =
+        changeAmount === null
+          ? null
+          : index === 0
+            ? changeAmount
+            : new Prisma.Decimal(0);
+      const lineCashReceived =
+        cashReceived === null ? null : lineTotal.plus(lineChange ?? 0);
+      const saleId = index === 0 ? checkoutGroupId : randomUUID();
+      const saleNumber = firstNumber + BigInt(index);
+      const saleCode = `PFI-SAL-${saleDate.replaceAll("-", "")}-${saleNumber.toString().padStart(3, "0")}`;
+      const [saleRow] = await transaction.$queryRaw<
+        Array<{ id: string; sale_code: string; created_at: Date }>
+      >`
+        INSERT INTO "fish_sales" (
+          "id", "sale_code", "batch_id", "product_id", "quantity", "unit_price",
+          "total_price", "payment_method", "cash_received", "change_amount",
+          "created_by", "checkout_group_id"
+        ) VALUES (
+          ${saleId}::uuid, ${saleCode}, ${allocation.batch_id}::uuid, ${product.id}::uuid,
+          ${allocation.quantity}::numeric, ${unitPrice.toString()}::numeric,
+          ${lineTotal.toString()}::numeric, ${input.payment_method},
+          ${lineCashReceived?.toString() ?? null}::numeric,
+          ${lineChange?.toString() ?? null}::numeric,
+          ${actor.id}::uuid, ${checkoutGroupId}::uuid
+        )
+        RETURNING "id", "sale_code", "created_at"
+      `;
+      saleRows.push(saleRow!);
+      await transaction.auditLog.create({
+        data: {
+          requestId: request.requestId,
+          actorId: actor.id,
+          action: "CREATE_SALE",
+          entityType: "fish_sales",
+          entityId: saleId,
+          ipAddress: request.socket.remoteAddress?.slice(0, 45) ?? null,
+        },
+      });
+    }
+
+    const productDisplayName = product.variant_label
+      ? `${product.name} ${product.variant_label}`
+      : product.name;
+    const speciesDisplayName = product.species
+      ? `${product.species}${product.variant_label ? ` ${product.variant_label}` : ""}`
+      : productDisplayName;
+    const createdAt = saleRows[0]!.created_at;
+    const response: CachedResponse = {
+      status: "success",
+      message: "Penjualan berhasil dicatat.",
+      data: {
+        sale: {
+          id: checkoutGroupId,
+          sale_code: saleRows[0]!.sale_code,
+          checkout_group_id: checkoutGroupId,
+          sold_at: createdAt.toISOString(),
+          product_id: product.id,
+          product_sku: product.sku,
+          product_name: productDisplayName,
+          species_name: speciesDisplayName,
+          fish_size: product.size_label,
+          unit: product.unit,
+          quantity: input.quantity,
+          unit_price: unitPrice.toNumber(),
+          total_payment: totalPrice.toNumber(),
+          total_price: totalPrice.toNumber(),
+          total_amount: totalPrice.toNumber(),
+          payment_method: input.payment_method,
+          cash_received: cashReceived?.toNumber() ?? null,
+          change_amount: changeAmount?.toNumber() ?? null,
+          change_due: changeAmount?.toNumber() ?? null,
+          batch_allocations: allocations.map((allocation) => ({
+            batch_id: allocation.batch_id,
+            quantity: allocation.quantity,
+          })),
+          created_by: actor.id,
+          cashier_name: actor.name,
+          created_at: createdAt.toISOString(),
+          status: "active",
+        },
+        receipt: {
+          ...this.mapReceipt({
+            createdAt,
+            batchSpeciesName: speciesDisplayName,
+            batchFishSize: product.size_label,
+            productName: productDisplayName,
+            productSku: product.sku,
+            productUnit: product.unit,
+            quantity,
+            unitPrice,
+            totalPrice,
+            paymentMethod: input.payment_method,
+            cashierName: actor.name,
+          }),
+        },
+      },
+    };
+
+    await transaction.$executeRaw`
+      UPDATE "idempotency_keys"
+      SET "status" = 'completed', "response_status" = 201,
+          "response_body" = ${JSON.stringify(response)}::jsonb,
+          "completed_at" = CURRENT_TIMESTAMP
+      WHERE "id" = ${idempotencyRowId}::uuid
+    `;
+    return response;
+  }
+
   async listSales(query: PosSalesListQuery, requestId: string) {
-    const createdAt: Prisma.DateTimeFilter = {
-      ...(query.startDate ? { gte: new Date(query.startDate) } : {}),
-      ...(query.endDate ? { lte: new Date(query.endDate) } : {}),
-    };
-    const statusFilter: Prisma.FishSaleWhereInput["void"] =
-      query.status === "active"
-        ? { is: null }
-        : query.status === "voided"
-          ? { isNot: null }
-          : undefined;
-    const where: Prisma.FishSaleWhereInput = {
-      ...(Object.keys(createdAt).length > 0 ? { createdAt } : {}),
-      ...(statusFilter !== undefined ? { void: statusFilter } : {}),
-    };
+    const startDate = query.startDate ? new Date(query.startDate) : null;
+    const endDate = query.endDate ? new Date(query.endDate) : null;
+    const activeOnly = query.status === "active";
+    const voidedOnly = query.status === "voided";
     const skip = (query.page - 1) * query.limit;
-    const [totalItems, sales] = await this.prisma.$transaction([
-      this.prisma.fishSale.count({ where }),
-      this.prisma.fishSale.findMany({
-        where,
-        skip,
-        take: query.limit,
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-        include: saleInclude,
-      }),
+    const [countRows, groups] = await this.prisma.$transaction([
+      this.prisma.$queryRaw<Array<{ total_items: bigint }>>`
+        WITH grouped AS (
+          SELECT COALESCE("sale"."checkout_group_id", "sale"."id") AS group_id,
+                 COUNT(*) AS row_count,
+                 COUNT("sale_void"."sale_id") AS void_count
+          FROM "fish_sales" AS "sale"
+          LEFT JOIN "fish_sale_voids" AS "sale_void"
+            ON "sale_void"."sale_id" = "sale"."id"
+          WHERE (${startDate}::timestamptz IS NULL OR "sale"."created_at" >= ${startDate}::timestamptz)
+            AND (${endDate}::timestamptz IS NULL OR "sale"."created_at" <= ${endDate}::timestamptz)
+          GROUP BY COALESCE("sale"."checkout_group_id", "sale"."id")
+        )
+        SELECT COUNT(*) AS total_items
+        FROM grouped
+        WHERE (${!activeOnly} OR void_count = 0)
+          AND (${!voidedOnly} OR void_count = row_count)
+      `,
+      this.prisma.$queryRaw<SaleGroupPageRow[]>`
+        WITH grouped AS (
+          SELECT COALESCE("sale"."checkout_group_id", "sale"."id") AS group_id,
+                 MIN("sale"."created_at") AS created_at,
+                 ARRAY_AGG(
+                   "sale"."id"
+                   ORDER BY ("sale"."id" = "sale"."checkout_group_id") DESC, "sale"."id"
+                 ) AS sale_ids,
+                 BOOL_OR("sale"."checkout_group_id" IS NOT NULL) AS has_checkout_group,
+                 COUNT(*) AS row_count,
+                 COUNT("sale_void"."sale_id") AS void_count
+          FROM "fish_sales" AS "sale"
+          LEFT JOIN "fish_sale_voids" AS "sale_void"
+            ON "sale_void"."sale_id" = "sale"."id"
+          WHERE (${startDate}::timestamptz IS NULL OR "sale"."created_at" >= ${startDate}::timestamptz)
+            AND (${endDate}::timestamptz IS NULL OR "sale"."created_at" <= ${endDate}::timestamptz)
+          GROUP BY COALESCE("sale"."checkout_group_id", "sale"."id")
+        )
+        SELECT group_id, created_at, sale_ids, has_checkout_group,
+               COUNT(*) OVER() AS total_items
+        FROM grouped
+        WHERE (${!activeOnly} OR void_count = 0)
+          AND (${!voidedOnly} OR void_count = row_count)
+        ORDER BY created_at DESC, group_id DESC
+        OFFSET ${skip} LIMIT ${query.limit}
+      `,
     ]);
+    const saleIds = [...new Set(groups.flatMap((group) => group.sale_ids))];
+    const sales =
+      saleIds.length === 0
+        ? []
+        : await this.prisma.fishSale.findMany({
+            where: { id: { in: saleIds } },
+            include: saleInclude,
+          });
+    const salesById = new Map(sales.map((sale) => [sale.id, sale]));
+    const items = groups.map((group) => {
+      const members = group.sale_ids
+        .map((saleId) => salesById.get(saleId))
+        .filter((sale): sale is SaleWithRelations => sale !== undefined);
+      return group.has_checkout_group
+        ? this.mapGroupedSale(members, group.group_id)
+        : this.mapSale(members[0]!);
+    });
+    const totalItems = Number(
+      groups[0]?.total_items ?? countRows[0]?.total_items ?? 0n,
+    );
 
     return {
       status: "success" as const,
       message: "Daftar penjualan berhasil dimuat.",
       data: {
-        items: sales.map((sale) => this.mapSale(sale)),
+        items,
         pagination: {
           page: query.page,
           limit: query.limit,
@@ -571,10 +942,21 @@ export class PosService {
         "Transaksi penjualan tidak ditemukan.",
       );
     }
+    const [group] = await this.prisma.$queryRaw<
+      Array<{ checkout_group_id: string | null }>
+    >`
+      SELECT "checkout_group_id" FROM "fish_sales" WHERE "id" = ${saleId}::uuid
+    `;
+    const data = group?.checkout_group_id
+      ? this.mapGroupedSale(
+          await this.loadCheckoutGroupSales(group.checkout_group_id),
+          group.checkout_group_id,
+        )
+      : this.mapSale(sale);
     return {
       status: "success" as const,
       message: "Detail penjualan berhasil dimuat.",
-      data: this.mapSale(sale),
+      data,
       meta: { request_id: requestId },
     };
   }
@@ -595,14 +977,24 @@ export class PosService {
         "Transaksi penjualan tidak ditemukan.",
       );
     }
-    if (sale.createdBy !== actor.id) {
+    const [group] = await this.prisma.$queryRaw<
+      Array<{ checkout_group_id: string | null }>
+    >`
+      SELECT "checkout_group_id" FROM "fish_sales" WHERE "id" = ${saleId}::uuid
+    `;
+    const sales = group?.checkout_group_id
+      ? await this.loadCheckoutGroupSales(group.checkout_group_id)
+      : [sale];
+    const primarySale =
+      sales.find((item) => item.id === group?.checkout_group_id) ?? sales[0]!;
+    if (sales.some((item) => item.createdBy !== actor.id)) {
       throw new ApiException(
         HttpStatus.FORBIDDEN,
         "FORBIDDEN",
         "Cetak ulang hanya diizinkan untuk pembuat transaksi.",
       );
     }
-    if (sale.void) {
+    if (sales.some((item) => item.void)) {
       throw new ApiException(
         HttpStatus.CONFLICT,
         "RECEIPT_NOT_AVAILABLE",
@@ -615,17 +1007,29 @@ export class PosService {
       message: "Data struk berhasil dimuat.",
       data: {
         ...this.mapReceipt({
-          createdAt: sale.createdAt,
-          batchSpeciesName: sale.batch?.species.speciesName ?? null,
-          batchFishSize: sale.batch?.incomingFish?.fishSize ?? null,
-          productName: sale.product?.name ?? null,
-          productSku: sale.product?.sku ?? null,
-          productUnit: sale.product?.unit ?? null,
-          quantity: sale.quantity,
-          unitPrice: sale.unitPrice,
-          totalPrice: sale.totalPrice,
-          paymentMethod: sale.paymentMethod,
-          cashierName: sale.creator.name,
+          createdAt: primarySale.createdAt,
+          batchSpeciesName: nameWithVariant(
+            primarySale.batch?.species.speciesName ?? null,
+            primarySale.product?.variantLabel ?? null,
+          ),
+          batchFishSize: primarySale.batch?.incomingFish?.fishSize ?? null,
+          productName: nameWithVariant(
+            primarySale.product?.name ?? null,
+            primarySale.product?.variantLabel ?? null,
+          ),
+          productSku: primarySale.product?.sku ?? null,
+          productUnit: primarySale.product?.unit ?? null,
+          quantity: sales.reduce(
+            (total, item) => total.plus(item.quantity),
+            new Prisma.Decimal(0),
+          ),
+          unitPrice: primarySale.unitPrice,
+          totalPrice: sales.reduce(
+            (total, item) => total.plus(item.totalPrice),
+            new Prisma.Decimal(0),
+          ),
+          paymentMethod: primarySale.paymentMethod,
+          cashierName: primarySale.creator.name,
         }),
       },
       meta: { request_id: requestId },
@@ -872,9 +1276,10 @@ export class PosService {
               id: string;
               batch_id: string | null;
               product_id: string | null;
+              checkout_group_id: string | null;
             }>
           >`
-            SELECT "id", "batch_id", "product_id"
+            SELECT "id", "batch_id", "product_id", "checkout_group_id"
             FROM "fish_sales"
             WHERE "id" = ${saleId}::uuid
           `;
@@ -884,6 +1289,23 @@ export class PosService {
               "SALE_NOT_FOUND",
               "Transaksi penjualan tidak ditemukan.",
             );
+          }
+
+          if (saleReference.checkout_group_id) {
+            const response = await this.voidCheckoutGroup(
+              transaction,
+              saleReference.checkout_group_id,
+              actor,
+              request,
+            );
+            await transaction.$executeRaw`
+              UPDATE "idempotency_keys"
+              SET "status" = 'completed', "response_status" = 200,
+                  "response_body" = ${JSON.stringify(response)}::jsonb,
+                  "completed_at" = CURRENT_TIMESTAMP
+              WHERE "id" = ${idempotencyRow.id}::uuid
+            `;
+            return response;
           }
 
           if (saleReference.product_id) {
@@ -1043,6 +1465,166 @@ export class PosService {
     }
   }
 
+  private async voidCheckoutGroup(
+    transaction: Prisma.TransactionClient,
+    checkoutGroupId: string,
+    actor: AuthenticatedUser,
+    request: RequestWithId,
+  ): Promise<CachedResponse> {
+    const sales = await transaction.$queryRaw<
+      Array<{ id: string; batch_id: string | null; product_id: string | null }>
+    >`
+      SELECT "id", "batch_id", "product_id"
+      FROM "fish_sales"
+      WHERE "checkout_group_id" = ${checkoutGroupId}::uuid
+      ORDER BY "batch_id", "id"
+    `;
+    if (sales.length === 0) {
+      throw new ApiException(
+        HttpStatus.NOT_FOUND,
+        "SALE_NOT_FOUND",
+        "Transaksi penjualan tidak ditemukan.",
+      );
+    }
+
+    const productIds = [
+      ...new Set(
+        sales
+          .map((sale) => sale.product_id)
+          .filter((productId): productId is string => productId !== null),
+      ),
+    ].sort();
+    for (const productId of productIds) {
+      const [lockedProduct] = await transaction.$queryRaw<
+        Array<{ id: string }>
+      >`
+        SELECT "id" FROM "products" WHERE "id" = ${productId}::uuid FOR UPDATE
+      `;
+      if (!lockedProduct) {
+        throw new ApiException(
+          HttpStatus.NOT_FOUND,
+          "PRODUCT_NOT_FOUND",
+          "Produk transaksi tidak ditemukan.",
+        );
+      }
+    }
+
+    const batchIds = [
+      ...new Set(
+        sales
+          .map((sale) => sale.batch_id)
+          .filter((batchId): batchId is string => batchId !== null),
+      ),
+    ].sort();
+    const batches =
+      batchIds.length === 0
+        ? []
+        : await transaction.$queryRaw<Array<{ id: string; status: string }>>(
+            Prisma.sql`
+              SELECT "id", "status" FROM "batches"
+              WHERE "id" IN (${Prisma.join(
+                batchIds.map((batchId) => Prisma.sql`${batchId}::uuid`),
+              )})
+              ORDER BY "id"
+              FOR UPDATE
+            `,
+          );
+    if (batches.length !== batchIds.length) {
+      throw new ApiException(
+        HttpStatus.NOT_FOUND,
+        "BATCH_NOT_FOUND",
+        "Satu atau lebih batch transaksi tidak ditemukan.",
+      );
+    }
+    if (batches.some((batch) => batch.status === "voided")) {
+      throw new ApiException(
+        HttpStatus.CONFLICT,
+        "BATCH_NOT_ACTIVE",
+        "Penjualan dari batch yang telah di-VOID tidak dapat dibatalkan.",
+      );
+    }
+
+    for (const sale of sales) {
+      const [lockedSale] = await transaction.$queryRaw<
+        Array<{ sale_id: string; batch_id: string | null }>
+      >`
+        SELECT "sale_id", "batch_id"
+        FROM "lock_fish_sale_for_update"(${sale.id}::uuid)
+      `;
+      if (!lockedSale) {
+        throw new ApiException(
+          HttpStatus.NOT_FOUND,
+          "SALE_NOT_FOUND",
+          "Satu atau lebih baris penjualan tidak ditemukan.",
+        );
+      }
+    }
+
+    const existingVoids = await transaction.$queryRaw<
+      Array<{ sale_id: string }>
+    >(Prisma.sql`
+      SELECT "sale_id" FROM "fish_sale_voids"
+      WHERE "sale_id" IN (${Prisma.join(
+        sales.map((sale) => Prisma.sql`${sale.id}::uuid`),
+      )})
+    `);
+    if (existingVoids.length > 0) {
+      throw new ApiException(
+        HttpStatus.CONFLICT,
+        "SALE_ALREADY_VOIDED",
+        "Transaksi penjualan sudah di-VOID.",
+      );
+    }
+
+    const voidedRows: Array<{ saleId: string; voidedAt: Date }> = [];
+    for (const sale of sales) {
+      const voided = await transaction.fishSaleVoid.create({
+        data: { saleId: sale.id, voidedBy: actor.id },
+      });
+      voidedRows.push({ saleId: sale.id, voidedAt: voided.voidedAt });
+      await transaction.auditLog.create({
+        data: {
+          requestId: request.requestId,
+          actorId: actor.id,
+          action: "VOID_SALE",
+          entityType: "fish_sales",
+          entityId: sale.id,
+          ipAddress: request.socket.remoteAddress?.slice(0, 45) ?? null,
+        },
+      });
+    }
+
+    const updatedBatches =
+      batchIds.length === 0
+        ? []
+        : await transaction.$queryRaw<Array<{ id: string; status: string }>>(
+            Prisma.sql`
+              SELECT "id", "status" FROM "batches"
+              WHERE "id" IN (${Prisma.join(
+                batchIds.map((batchId) => Prisma.sql`${batchId}::uuid`),
+              )})
+              ORDER BY "id"
+            `,
+          );
+    const response: CachedResponse = {
+      status: "success",
+      message: "Transaksi penjualan berhasil di-VOID.",
+      data: {
+        sale_id: checkoutGroupId,
+        checkout_group_id: checkoutGroupId,
+        voided_sale_ids: sales.map((sale) => sale.id),
+        status: "voided",
+        voided_at:
+          voidedRows
+            .find((row) => row.saleId === checkoutGroupId)
+            ?.voidedAt.toISOString() ?? voidedRows[0]!.voidedAt.toISOString(),
+        voided_by: actor.id,
+        batch_statuses: updatedBatches,
+      },
+    };
+    return response;
+  }
+
   private mapReceipt(input: {
     createdAt: Date;
     batchSpeciesName: string | null;
@@ -1070,22 +1652,99 @@ export class PosService {
     };
   }
 
-  private mapSale(sale: SaleWithRelations) {
+  private async loadCheckoutGroupSales(
+    checkoutGroupId: string,
+  ): Promise<SaleWithRelations[]> {
+    const members = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "fish_sales"
+      WHERE "checkout_group_id" = ${checkoutGroupId}::uuid
+      ORDER BY "id"
+    `;
+    if (members.length === 0) return [];
+    return this.prisma.fishSale.findMany({
+      where: { id: { in: members.map((member) => member.id) } },
+      include: saleInclude,
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    });
+  }
+
+  private mapGroupedSale(sales: SaleWithRelations[], checkoutGroupId: string) {
+    const primary =
+      sales.find((sale) => sale.id === checkoutGroupId) ?? sales[0];
+    if (!primary) {
+      throw new Error("Checkout group has no sale rows.");
+    }
+    const quantity = sales.reduce(
+      (total, sale) => total.plus(sale.quantity),
+      new Prisma.Decimal(0),
+    );
+    const totalPrice = sales.reduce(
+      (total, sale) => total.plus(sale.totalPrice),
+      new Prisma.Decimal(0),
+    );
+    const cashReceived = sales.some((sale) => sale.cashReceived === null)
+      ? null
+      : sales.reduce(
+          (total, sale) => total.plus(sale.cashReceived!),
+          new Prisma.Decimal(0),
+        );
+    const changeAmount = sales.some((sale) => sale.changeAmount === null)
+      ? null
+      : sales.reduce(
+          (total, sale) => total.plus(sale.changeAmount!),
+          new Prisma.Decimal(0),
+        );
+    return {
+      ...this.mapSale(primary, false),
+      id: checkoutGroupId,
+      checkout_group_id: checkoutGroupId,
+      batch_id: null,
+      batch_allocations: sales.map((sale) => ({
+        batch_id: sale.batchId,
+        quantity: sale.quantity.toNumber(),
+      })),
+      product_name: nameWithVariant(
+        primary.product?.name ?? null,
+        primary.product?.variantLabel ?? null,
+      ),
+      species_name: nameWithVariant(
+        primary.batch?.species.speciesName ?? primary.product?.name ?? null,
+        primary.product?.variantLabel ?? null,
+      ),
+      quantity: quantity.toNumber(),
+      total_price: totalPrice.toNumber(),
+      total_amount: totalPrice.toNumber(),
+      cash_received: cashReceived?.toNumber() ?? null,
+      change_amount: changeAmount?.toNumber() ?? null,
+      change_due: changeAmount?.toNumber() ?? null,
+      status: sales.some((sale) => sale.void) ? "voided" : "active",
+    };
+  }
+
+  private mapSale(sale: SaleWithRelations, includeBatchCode = true) {
     const batch = sale.batch;
     const product = sale.product;
     return {
       id: sale.id,
       sale_code: sale.saleCode,
       created_at: sale.createdAt.toISOString(),
+      sold_at: sale.createdAt.toISOString(),
       batch_id: sale.batchId,
-      batch_code: batch?.batchCode ?? null,
+      ...(includeBatchCode ? { batch_code: batch?.batchCode ?? null } : {}),
       product_id: sale.productId,
       product_sku: product?.sku ?? null,
-      product_name: product?.name ?? null,
+      product_name: nameWithVariant(
+        product?.name ?? null,
+        product?.variantLabel ?? null,
+      ),
+      variant_label: product?.variantLabel ?? null,
       tracking_mode: product?.trackingMode ?? "BATCH_TRACKED",
       species_id: batch?.species.id ?? null,
       species_code: batch?.species.speciesCode ?? null,
-      species_name: batch?.species.speciesName ?? product?.name ?? null,
+      species_name: nameWithVariant(
+        batch?.species.speciesName ?? product?.name ?? null,
+        product?.variantLabel ?? null,
+      ),
       fish_size:
         batch?.incomingFish?.fishSize ??
         product?.sizeLabel ??
@@ -1095,12 +1754,14 @@ export class PosService {
       unit_price: Number(sale.unitPrice),
       total_price: Number(sale.totalPrice),
       total_amount: Number(sale.totalPrice),
+      total_payment: Number(sale.totalPrice),
       payment_method: sale.paymentMethod,
       cash_received:
         sale.cashReceived === null ? null : Number(sale.cashReceived),
       change_amount:
         sale.changeAmount === null ? null : Number(sale.changeAmount),
       created_by: { id: sale.creator.id, name: sale.creator.name },
+      cashier_name: sale.creator.name,
       status: sale.void ? "voided" : "active",
       voided_at: sale.void?.voidedAt.toISOString() ?? null,
       voided_by: sale.void

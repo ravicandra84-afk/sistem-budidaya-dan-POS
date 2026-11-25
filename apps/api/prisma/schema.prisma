@@ -193,6 +193,7 @@ model Product {
   trackingMode  ProductTrackingMode @map("tracking_mode")
   species       String?             @db.VarChar(100)
   sizeLabel     String?             @map("size_label") @db.VarChar(20)
+  variantLabel  String?             @map("variant_label") @db.VarChar(80)
   unit          String              @db.VarChar(20)
   unitPrice     Decimal             @map("unit_price") @db.Decimal(12, 2)
   stockQuantity Decimal?            @map("stock_quantity") @db.Decimal(12, 2)

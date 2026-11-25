@@ -23,8 +23,12 @@ interface BluetoothRemoteGATT {
   disconnect(): void;
 }
 
-interface BluetoothDevice {
+export interface BluetoothDevice {
   gatt?: BluetoothRemoteGATT | null;
+  addEventListener(
+    type: "gattserverdisconnected",
+    listener: () => void,
+  ): void;
 }
 
 interface WebBluetoothApi {
@@ -50,7 +54,7 @@ export function isWebBluetoothSupported(): boolean {
   return getBluetoothApi() !== undefined;
 }
 
-export async function printViaWebBluetooth(bytes: Uint8Array): Promise<void> {
+export async function connectBluetoothPrinter(): Promise<BluetoothDevice> {
   const bluetoothApi = getBluetoothApi();
   if (!isWebBluetoothSupported() || !bluetoothApi) {
     throw new Error(
@@ -58,20 +62,50 @@ export async function printViaWebBluetooth(bytes: Uint8Array): Promise<void> {
     );
   }
 
-  let device: BluetoothDevice;
+  const device = await bluetoothApi.requestDevice({
+    acceptAllDevices: true,
+    optionalServices: PRINTER_SERVICE_UUIDS,
+  });
+  if (!device.gatt) {
+    throw new Error("Perangkat tidak menyediakan koneksi Bluetooth GATT.");
+  }
+
   try {
-    device = await bluetoothApi.requestDevice({
-      acceptAllDevices: true,
-      optionalServices: PRINTER_SERVICE_UUIDS,
-    });
-  } catch (error) {
-    if (isNotFoundError(error)) {
-      throw new Error("Pemilihan printer Bluetooth dibatalkan.");
+    const server = await device.gatt.connect();
+    const writeCharacteristic = await findWritableCharacteristic(server);
+    if (!writeCharacteristic) {
+      throw new Error(
+        "Printer tidak menyediakan karakteristik Bluetooth untuk penulisan data.",
+      );
     }
+    return device;
+  } catch (error) {
+    device.gatt.disconnect();
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error("Printer Bluetooth tidak dapat dihubungkan.");
+  }
+}
+
+export async function printViaWebBluetooth(
+  bytes: Uint8Array,
+  existingDevice?: BluetoothDevice | null,
+): Promise<void> {
+  const bluetoothApi = getBluetoothApi();
+  if (!isWebBluetoothSupported() || !bluetoothApi) {
     throw new Error(
-      "Printer Bluetooth tidak dapat dipilih. Pastikan Bluetooth aktif lalu coba lagi.",
+      "Web Bluetooth tidak tersedia. Gunakan Chrome pada koneksi HTTPS atau localhost.",
     );
   }
+
+  const ownsDevice = !existingDevice;
+  const device =
+    existingDevice ??
+    (await bluetoothApi.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: PRINTER_SERVICE_UUIDS,
+    }));
 
   try {
     if (!device.gatt) {
@@ -79,15 +113,7 @@ export async function printViaWebBluetooth(bytes: Uint8Array): Promise<void> {
     }
 
     const server = await device.gatt.connect();
-    const services = await server.getPrimaryServices();
-    let writeCharacteristic: BluetoothRemoteGATTCharacteristic | undefined;
-
-    for (const service of services) {
-      const characteristics = await service.getCharacteristics();
-      writeCharacteristic = characteristics.find(isWritableCharacteristic);
-      if (writeCharacteristic) break;
-    }
-
+    const writeCharacteristic = await findWritableCharacteristic(server);
     if (!writeCharacteristic) {
       throw new Error(
         "Printer tidak menyediakan karakteristik Bluetooth untuk penulisan data.",
@@ -102,22 +128,31 @@ export async function printViaWebBluetooth(bytes: Uint8Array): Promise<void> {
       }
     }
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message.startsWith("Printer tidak menyediakan")
-    ) {
+    if (error instanceof Error) {
       throw error;
     }
-    throw new Error(
-      "Koneksi atau pengiriman ke printer Bluetooth gagal. Pastikan printer menyala dan berada dalam jangkauan.",
-    );
+    throw new Error("Koneksi atau pengiriman ke printer Bluetooth gagal.");
   } finally {
-    try {
-      device.gatt?.disconnect();
-    } catch {
-      // The print result should not be replaced by a disconnect cleanup error.
+    if (ownsDevice) {
+      try {
+        device.gatt?.disconnect();
+      } catch {
+        // The print result should not be replaced by a disconnect cleanup error.
+      }
     }
   }
+}
+
+async function findWritableCharacteristic(
+  server: BluetoothRemoteGATTServer,
+): Promise<BluetoothRemoteGATTCharacteristic | undefined> {
+  const services = await server.getPrimaryServices();
+  for (const service of services) {
+    const characteristics = await service.getCharacteristics();
+    const characteristic = characteristics.find(isWritableCharacteristic);
+    if (characteristic) return characteristic;
+  }
+  return undefined;
 }
 
 function getBluetoothApi(): WebBluetoothApi | undefined {
@@ -150,15 +185,6 @@ function writeChunk(
     return characteristic.writeValue(chunk);
   }
   throw new Error("Karakteristik Bluetooth tidak dapat menulis data.");
-}
-
-function isNotFoundError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "name" in error &&
-    error.name === "NotFoundError"
-  );
 }
 
 function delay(milliseconds: number): Promise<void> {

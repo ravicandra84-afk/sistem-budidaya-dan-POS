@@ -26,12 +26,12 @@ type CachedResponse = {
 type Mutation = (transaction: Prisma.TransactionClient) => Promise<unknown>;
 
 type CatalogBatchRow = {
-  product_id: string;
   batch_id: string;
   batch_code: string;
   species_name: string;
   fish_size: string;
   current_stock: bigint;
+  sale_readiness: string;
 };
 
 const productInclude = { category: true } satisfies Prisma.ProductInclude;
@@ -40,6 +40,13 @@ type ProductWithCategory = Prisma.ProductGetPayload<{
 }>;
 
 class ExistingCatalogIdempotencyKeyError extends Error {}
+
+function normalizeCatalogMatchValue(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s*-\s*/g, "-");
+}
 
 function legacyFishProductSku(speciesCode: string, fishSize: string): string {
   const sizeCode = fishSize.toUpperCase().replace(/[^A-Z0-9]+/g, "-");
@@ -560,7 +567,10 @@ export class PosCatalogService {
         this.assertProductMode(merged, category.requiresBatch);
         const updated = await transaction.product.update({
           where: { id: productId },
-          data: this.productCreateData(merged),
+          data: this.productCreateData(
+            merged,
+            input.variant_label !== undefined,
+          ),
           include: productInclude,
         });
         await this.recordAudit(
@@ -635,62 +645,67 @@ export class PosCatalogService {
     });
     const batchRows = await this.prisma.$queryRaw<CatalogBatchRow[]>`
       SELECT
-        "product"."id" AS product_id,
         "batch"."id" AS batch_id,
         "batch"."batch_code" AS batch_code,
+        "batch"."sale_readiness" AS sale_readiness,
         "species"."species_name" AS species_name,
         "receipt"."fish_size" AS fish_size,
         "calculate_batch_stock"("batch"."id") AS current_stock
-      FROM "products" AS "product"
-      INNER JOIN "product_categories" AS "category"
-        ON "category"."id" = "product"."category_id"
-      INNER JOIN "batches" AS "batch"
-        ON "batch"."status" = 'active'
-       AND "batch"."sale_readiness" = 'SIAP_JUAL'
+      FROM "batches" AS "batch"
       INNER JOIN "fish_species" AS "species"
         ON "species"."id" = "batch"."species_id"
       INNER JOIN "incoming_fish" AS "receipt"
         ON "receipt"."batch_id" = "batch"."id"
-      WHERE "product"."is_active" = true
-        AND "category"."is_active" = true
-        AND "product"."tracking_mode" = 'BATCH_TRACKED'
-        AND "product"."species" = "species"."species_name"
-        AND "product"."size_label" = "receipt"."fish_size"
+      WHERE "batch"."status" = 'active'
+        AND "batch"."sale_readiness" = 'SIAP_JUAL'
         AND "calculate_batch_stock"("batch"."id") > 0
-      ORDER BY "product"."name" ASC, "batch"."created_at" DESC, "batch"."id" DESC
+      ORDER BY "batch"."created_at" DESC, "batch"."id" DESC
     `;
-    const batchesByProduct = new Map<string, CatalogBatchRow[]>();
-    for (const row of batchRows) {
-      const current = batchesByProduct.get(row.product_id) ?? [];
-      current.push(row);
-      batchesByProduct.set(row.product_id, current);
-    }
-
-    const items = products.flatMap((product) => {
+    const items = products.map((product) => {
       if (product.trackingMode === "BATCH_TRACKED") {
-        const readyBatches = batchesByProduct.get(product.id) ?? [];
-        if (readyBatches.length === 0) return [];
-        return [
-          {
-            ...this.mapProduct(product),
-            stock_quantity: readyBatches.reduce(
-              (total, batch) => total + Number(batch.current_stock),
-              0,
-            ),
-            batches: readyBatches.map((batch) => ({
-              id: batch.batch_id,
-              batch_code: batch.batch_code,
-              current_stock: Number(batch.current_stock),
-              species_name: batch.species_name,
-              size_label: batch.fish_size,
-            })),
-          },
-        ];
+        const normalizedSpecies = product.species
+          ? normalizeCatalogMatchValue(product.species)
+          : null;
+        const normalizedSize = product.sizeLabel
+          ? normalizeCatalogMatchValue(product.sizeLabel)
+          : null;
+        const readyBatches =
+          normalizedSpecies && normalizedSize
+            ? batchRows.filter(
+                (batch) =>
+                  normalizeCatalogMatchValue(batch.species_name) ===
+                    normalizedSpecies &&
+                  normalizeCatalogMatchValue(batch.fish_size) ===
+                    normalizedSize,
+              )
+            : [];
+        const availableStock = readyBatches.reduce(
+          (total, batch) => total + Number(batch.current_stock),
+          0,
+        );
+        return {
+          ...this.mapProduct(product),
+          available_stock: availableStock,
+          stock_quantity: availableStock,
+          batches: readyBatches.map((batch) => ({
+            id: batch.batch_id,
+            batch_id: batch.batch_id,
+            batch_code: batch.batch_code,
+            current_stock: Number(batch.current_stock),
+            remaining_stock: Number(batch.current_stock),
+            sale_readiness: batch.sale_readiness,
+            species_name: batch.species_name,
+            size_label: batch.fish_size,
+          })),
+        };
       }
       const stock = product.stockQuantity?.toNumber() ?? 0;
-      return stock > 0
-        ? [{ ...this.mapProduct(product), stock_quantity: stock, batches: [] }]
-        : [];
+      return {
+        ...this.mapProduct(product),
+        available_stock: stock,
+        stock_quantity: stock,
+        batches: [],
+      };
     });
 
     return {
@@ -900,7 +915,10 @@ export class PosCatalogService {
     }
   }
 
-  private productCreateData(input: CreateProductInput) {
+  private productCreateData(
+    input: CreateProductInput,
+    includeVariantLabel = true,
+  ) {
     return {
       categoryId: input.category_id,
       sku: input.sku,
@@ -908,6 +926,9 @@ export class PosCatalogService {
       trackingMode: input.tracking_mode,
       species: input.species,
       sizeLabel: input.size_label,
+      ...(includeVariantLabel
+        ? { variantLabel: input.variant_label?.trim() || null }
+        : {}),
       unit: input.unit,
       unitPrice: new Prisma.Decimal(input.unit_price.toString()),
       stockQuantity:
@@ -930,6 +951,10 @@ export class PosCatalogService {
       species: input.species === undefined ? current.species : input.species,
       size_label:
         input.size_label === undefined ? current.sizeLabel : input.size_label,
+      variant_label:
+        input.variant_label === undefined
+          ? current.variantLabel
+          : input.variant_label,
       unit: input.unit ?? current.unit,
       unit_price: input.unit_price ?? current.unitPrice.toNumber(),
       stock_quantity:
@@ -980,6 +1005,7 @@ export class PosCatalogService {
       tracking_mode: product.trackingMode,
       species: product.species,
       size_label: product.sizeLabel,
+      variant_label: product.variantLabel,
       unit: product.unit,
       unit_price: product.unitPrice.toNumber(),
       stock_quantity: product.stockQuantity?.toNumber() ?? null,

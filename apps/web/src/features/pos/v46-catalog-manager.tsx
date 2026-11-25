@@ -34,6 +34,7 @@ interface Product {
   tracking_mode: TrackingMode;
   species: string | null;
   size_label: string | null;
+  variant_label: string | null;
   unit: string;
   unit_price: number;
   stock_quantity: number | null;
@@ -57,6 +58,7 @@ const emptyForm = {
   tracking_mode: "BATCH_TRACKED" as TrackingMode,
   species: "",
   size_label: "",
+  variant_label: "",
   unit: "EKOR",
   unit_price: "",
   stock_quantity: "",
@@ -67,6 +69,26 @@ const emptyCategoryForm = {
   code: "",
   requires_batch: false,
 };
+
+const batchSpeciesOptions = ["Gurame Hitam", "Lele", "Nila", "Patin"];
+const batchSizeOptions = [
+  "2-4 cm",
+  "3-5 cm",
+  "4-6 cm",
+  "5-7 cm",
+  "7-9 cm",
+  "9-11 cm",
+  "10-12 cm",
+  ">12 cm",
+];
+
+function normalizeBatchSpecies(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function normalizeBatchSize(value: string): string {
+  return value.trim().replace(/\s*-\s*/g, "-");
+}
 
 export function V46CatalogManager() {
   const { session } = useAuth();
@@ -237,6 +259,7 @@ export function V46CatalogManager() {
       tracking_mode: product.tracking_mode,
       species: product.species ?? "",
       size_label: product.size_label ?? "",
+      variant_label: product.variant_label ?? "",
       unit: product.unit,
       unit_price: String(product.unit_price),
       stock_quantity:
@@ -285,9 +308,14 @@ export function V46CatalogManager() {
       name: form.name.trim(),
       tracking_mode: form.tracking_mode,
       species:
-        form.tracking_mode === "BATCH_TRACKED" ? form.species.trim() : null,
+        form.tracking_mode === "BATCH_TRACKED"
+          ? normalizeBatchSpecies(form.species)
+          : null,
       size_label:
-        form.tracking_mode === "BATCH_TRACKED" ? form.size_label.trim() : null,
+        form.tracking_mode === "BATCH_TRACKED"
+          ? normalizeBatchSize(form.size_label)
+          : null,
+      variant_label: form.variant_label.trim() || null,
       unit: form.unit.trim() || "PCS",
       unit_price: unitPrice,
       stock_quantity:
@@ -615,6 +643,11 @@ export function V46CatalogManager() {
                       {product.sku}
                     </p>
                     <p className="font-bold text-marine">{product.name}</p>
+                    {product.variant_label ? (
+                      <p className="text-xs text-slate-600">
+                        Varian: {product.variant_label}
+                      </p>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3">{product.category_name}</td>
                   <td className="px-4 py-3">
@@ -727,11 +760,25 @@ export function V46CatalogManager() {
                   }
                 />
               </Field>
+              <Field id="product-variant" label="Varian">
+                <Input
+                  id="product-variant"
+                  value={form.variant_label}
+                  onChange={(event) =>
+                    setForm((value) => ({
+                      ...value,
+                      variant_label: event.target.value,
+                    }))
+                  }
+                  placeholder="Hitam, Merah, atau kemasan 1 Kg"
+                />
+              </Field>
               {form.tracking_mode === "BATCH_TRACKED" ? (
                 <>
                   <Field id="product-species" label="Jenis ikan">
                     <Input
                       id="product-species"
+                      list="batch-species-options"
                       value={form.species}
                       onChange={(event) =>
                         setForm((value) => ({
@@ -740,10 +787,16 @@ export function V46CatalogManager() {
                         }))
                       }
                     />
+                    <datalist id="batch-species-options">
+                      {batchSpeciesOptions.map((species) => (
+                        <option key={species} value={species} />
+                      ))}
+                    </datalist>
                   </Field>
                   <Field id="product-size" label="Ukuran ikan">
                     <Input
                       id="product-size"
+                      list="batch-size-options"
                       value={form.size_label}
                       onChange={(event) =>
                         setForm((value) => ({
@@ -753,6 +806,11 @@ export function V46CatalogManager() {
                       }
                       placeholder="3-5 cm"
                     />
+                    <datalist id="batch-size-options">
+                      {batchSizeOptions.map((size) => (
+                        <option key={size} value={size} />
+                      ))}
+                    </datalist>
                   </Field>
                 </>
               ) : (

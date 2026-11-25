@@ -94,6 +94,7 @@ async function setSerialBehavior(page: Page) {
 async function setBluetoothBehavior(page: Page) {
   await page.addInitScript(() => {
     const state = {
+      requestDeviceCalls: 0,
       requestOptions: null as {
         acceptAllDevices: boolean;
         optionalServices: string[];
@@ -104,6 +105,7 @@ async function setBluetoothBehavior(page: Page) {
       chunks: [] as number[][],
       disconnected: false,
     };
+    let disconnectedListener: (() => void) | undefined;
     Object.defineProperty(window, "__posBluetoothState", {
       configurable: true,
       value: state,
@@ -112,9 +114,13 @@ async function setBluetoothBehavior(page: Page) {
       configurable: true,
       value: {
         requestDevice: async (options: typeof state.requestOptions) => {
+          state.requestDeviceCalls += 1;
           state.requestOptions = options;
           return {
             gatt: {
+              get connected() {
+                return state.connected;
+              },
               connect: async () => {
                 state.connected = true;
                 return {
@@ -141,8 +147,16 @@ async function setBluetoothBehavior(page: Page) {
                 };
               },
               disconnect: () => {
+                state.connected = false;
                 state.disconnected = true;
+                disconnectedListener?.();
               },
+            },
+            addEventListener: (
+              _type: string,
+              listener: () => void,
+            ) => {
+              disconnectedListener = listener;
             },
           };
         },
@@ -169,7 +183,10 @@ async function setKasirSession(page: Page, userId = "kasir-actor") {
   }, userId);
 }
 
-async function stubCashierSale(page: Page) {
+async function stubCashierSale(
+  page: Page,
+  options: { connectPrinterBeforeSale?: boolean } = {},
+) {
   let postCount = 0;
   await page.route("**/api/v1/pos/catalog", async (route: Route) => {
     await route.fulfill({
@@ -180,19 +197,26 @@ async function stubCashierSale(page: Page) {
           items: [
             {
               id: "77777777-7777-4777-8777-777777777777",
+              category_id: "benih-ikan",
+              category_name: "Benih Ikan",
               sku: "NILA-35",
               name: "Ikan Nila 3-5 cm",
               tracking_mode: "BATCH_TRACKED",
               species: "Ikan Nila",
               size_label: "3-5 cm",
+              variant_label: null,
               unit: "EKOR",
               unit_price: 2500,
+              available_stock: 20,
               stock_quantity: 20,
               batches: [
                 {
                   id: batchId,
+                  batch_id: batchId,
                   batch_code: "BATCH-PRINT-001",
                   current_stock: 20,
+                  remaining_stock: 20,
+                  sale_readiness: "SIAP_JUAL",
                   species_name: "Ikan Nila",
                   size_label: "3-5 cm",
                 },
@@ -203,7 +227,7 @@ async function stubCashierSale(page: Page) {
       ),
     });
   });
-  await page.route("**/api/v1/sales", async (route) => {
+  await page.route("**/api/v1/pos/sales", async (route) => {
     if (route.request().method() === "POST") {
       postCount += 1;
       await route.fulfill({
@@ -219,10 +243,18 @@ async function stubCashierSale(page: Page) {
   });
   await setKasirSession(page);
   await page.goto("/pos");
+  if (options.connectPrinterBeforeSale) {
+    await page.getByRole("button", { name: "Hubungkan Printer" }).click();
+    await expect(
+      page.getByRole("button", { name: "Putuskan Printer" }),
+    ).toBeVisible();
+  }
+  await page.getByRole("button", { name: /^Benih Ikan/ }).click();
+  await page.getByRole("button", { name: /^Ikan Nila/ }).click();
   await page
-    .getByRole("button", { name: "Pilih batch BATCH-PRINT-001" })
+    .getByRole("button", { name: /^Pilih varian Ikan Nila 3-5 cm/ })
     .click();
-  await page.getByLabel("Jumlah ikan (ekor)").fill("2");
+  await page.getByLabel("Jumlah ekor").fill("2");
   await page.getByLabel("Uang diterima").fill("5000");
   await page.getByRole("button", { name: "Simpan penjualan" }).click();
   await expect(
@@ -254,7 +286,7 @@ test("successful committed sale triggers auto-print exactly once", async ({
 
   await expect.poll(() => printCallCount(page)).toBe(1);
   expect(api.postCount).toBe(1);
-  await expect(page.getByRole("status")).toContainText(
+  await expect(page.locator(".pos-receipt-print-status")).toContainText(
     "Dialog cetak sistem telah diminta",
   );
 });
@@ -269,7 +301,7 @@ test("thermal serial print sends bytes without changing the system print or sale
   await page
     .getByRole("button", { name: "Cetak Thermal (USB/Serial)" })
     .click();
-  await expect(page.getByRole("status")).toContainText(
+  await expect(page.locator(".pos-receipt-print-status")).toContainText(
     "Payload ESC/POS berhasil dikirim",
   );
   const serialState = await page.evaluate(
@@ -300,23 +332,22 @@ test("thermal serial print sends bytes without changing the system print or sale
   expect(api.postCount).toBe(1);
 });
 
-test("thermal Bluetooth print sends all ESC/POS chunks and disconnects without repeating the sale", async ({
+test("connected Bluetooth printer auto-prints a committed sale without requesting another device", async ({
   page,
 }) => {
   await setPrintBehavior(page, "succeed");
   await setBluetoothBehavior(page);
-  const api = await stubCashierSale(page);
-
-  await page.getByRole("button", { name: "Cetak Thermal (Bluetooth)" }).click();
-  await expect(page.getByRole("status")).toContainText(
-    "Struk berhasil dikirim ke printer Bluetooth",
-  );
+  const api = await stubCashierSale(page, { connectPrinterBeforeSale: true });
+  await expect(
+    page.getByRole("status").filter({ hasText: "Struk berhasil dikirim" }),
+  ).toBeVisible();
 
   const bluetoothState = await page.evaluate(
     () =>
       (
         window as Window & {
           __posBluetoothState: {
+            requestDeviceCalls: number;
             requestOptions: {
               acceptAllDevices: boolean;
               optionalServices: string[];
@@ -331,9 +362,16 @@ test("thermal Bluetooth print sends all ESC/POS chunks and disconnects without r
       ).__posBluetoothState,
   );
   const sentBytes = bluetoothState.chunks.flat();
+  expect(bluetoothState.requestDeviceCalls).toBe(1);
   expect(bluetoothState.requestOptions?.acceptAllDevices).toBe(true);
-  expect(bluetoothState.requestOptions?.optionalServices).toContain(
-    "000018f0-0000-1000-8000-00805f9b34fb",
+  expect(bluetoothState.requestOptions?.optionalServices).toEqual(
+    expect.arrayContaining([
+      "000018f0-0000-1000-8000-00805f9b34fb",
+      "0000ff00-0000-1000-8000-00805f9b34fb",
+      "49535343-fe7d-4ae5-8fa9-9fafd205e455",
+      "e7810a71-73ae-499d-8c15-faa9aef0c3f2",
+      "0000ffe0-0000-1000-8000-00805f9b34fb",
+    ]),
   );
   expect(bluetoothState.connected).toBe(true);
   expect(bluetoothState.discoveredServices).toBe(true);
@@ -341,10 +379,11 @@ test("thermal Bluetooth print sends all ESC/POS chunks and disconnects without r
   expect(bluetoothState.chunks.length).toBeGreaterThan(1);
   expect(bluetoothState.chunks.every((chunk) => chunk.length <= 64)).toBe(true);
   expect(sentBytes).toEqual(Array.from(buildEscPosReceiptBytes(receipt, "58")));
-  expect(bluetoothState.disconnected).toBe(true);
+  expect(bluetoothState.disconnected).toBe(false);
 
   await page.getByRole("button", { name: "Cetak Struk" }).click();
-  await expect.poll(() => printCallCount(page)).toBe(2);
+  await expect.poll(() => printCallCount(page)).toBe(1);
+  expect(bluetoothState.requestDeviceCalls).toBe(1);
   expect(api.postCount).toBe(1);
 });
 

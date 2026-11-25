@@ -498,6 +498,12 @@ Addendum ini memperluas POS setelah MVP. Aturan V4.5 dan trigger siklus hidup ba
 - VOID tetap berupa reversal append-only. Pemulihan stok `NON_BATCH` dan aturan jumlah desimal per unit harus ditetapkan dan diuji di P8-02 sebelum backend dirilis. Pemetaan struk mengikuti sembilan slot kanonis pada Bagian 7.2 dan response create-sale/cetak ulang harus identik.
 - Endpoint V4.6 untuk membuat penjualan adalah `POST /api/v1/sales`. Detail request/response, route katalog, audit action, idempotency, dan kompatibilitas dengan route V4.5 `/api/v1/pos/*` dikunci di P8-02; kontrak V4.5 tetap menjadi acuan bagi klien lama selama transisi.
 
+### 4.6 Fase 1 V4.7 — Label Varian dan Kontrak Alokasi Batch (`PROPOSED — TECHNICAL`)
+
+- Tambahkan `products.variant_label VARCHAR(80) NULL` secara additive. Schema create/update produk menerima `variant_label` yang opsional dan nullable; nilai ini tidak menambah atau mengubah sembilan field struk.
+- Kontrak `POST /api/v1/sales` tetap menerima payload V4.6 `batch_id` dan `quantity`, serta menambahkan alternatif `batch_allocations`: minimal satu `{ batch_id, quantity }`, setiap jumlah berupa integer minimal 1, tanpa `batch_id` duplikat, dan `quantity` harus sama dengan jumlah alokasi.
+- Fase ini hanya menyiapkan kolom dan validasi shared. Persistensi multi-batch, locking/validasi stok atomik, VOID, audit, serta pemetaan penjualan tetap memerlukan implementasi backend tersendiri. Tidak ada perubahan pada `fish_sales`, trigger V4.5, atau struk sembilan field.
+
 ## 5. Alur Data dan Mekanisme Transaksi Atomik
 
 ### 5.1 Alur Penerimaan Ikan (`POST /api/v1/fish-entries` — `LOCKED — V4.5`)

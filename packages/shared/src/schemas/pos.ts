@@ -22,6 +22,74 @@ const quantity2 = z
   .max(1_000_000)
   .refine((value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-8);
 
+const batchAllocationSchema = z
+  .object({
+    batch_id: z.uuid(),
+    quantity: z.number().int().min(1),
+  })
+  .strict();
+
+type SaleBatchSelection = {
+  product_id?: string | undefined;
+  batch_id?: string | null | undefined;
+  batch_allocations?: { batch_id: string; quantity: number }[] | undefined;
+  quantity: number;
+};
+
+function validateSaleBatchSelection(
+  input: SaleBatchSelection,
+  context: z.RefinementCtx,
+): void {
+  const hasBatchId = input.batch_id != null;
+  const allocations = input.batch_allocations;
+
+  if (hasBatchId && allocations !== undefined) {
+    context.addIssue({
+      code: "custom",
+      message: "Gunakan batch_id atau batch_allocations, bukan keduanya.",
+      path: ["batch_allocations"],
+    });
+  }
+
+  if (allocations !== undefined) {
+    const seenBatchIds = new Set<string>();
+    allocations.forEach((allocation, index) => {
+      if (seenBatchIds.has(allocation.batch_id)) {
+        context.addIssue({
+          code: "custom",
+          message: "batch_id tidak boleh duplikat dalam batch_allocations.",
+          path: ["batch_allocations", index, "batch_id"],
+        });
+      }
+      seenBatchIds.add(allocation.batch_id);
+    });
+
+    const allocatedQuantity = allocations.reduce(
+      (total, allocation) => total + allocation.quantity,
+      0,
+    );
+    if (allocatedQuantity !== input.quantity) {
+      context.addIssue({
+        code: "custom",
+        message: "quantity harus sama dengan total batch_allocations.",
+        path: ["quantity"],
+      });
+    }
+  }
+
+  if (
+    input.product_id === undefined &&
+    !hasBatchId &&
+    allocations === undefined
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Produk atau alokasi batch wajib diisi.",
+      path: ["batch_id"],
+    });
+  }
+}
+
 function normalizeAliases(
   value: unknown,
   aliases: Record<string, string>,
@@ -42,6 +110,7 @@ function normalizeAliases(
 
 const saleBase = {
   batch_id: z.uuid().nullable().optional(),
+  batch_allocations: z.array(batchAllocationSchema).min(1).optional(),
   product_id: z.uuid().optional(),
   quantity: quantity2,
   expected_unit_price: money2(0.01, 10_000_000),
@@ -49,6 +118,7 @@ const saleBase = {
 
 const saleAliases = {
   batchId: "batch_id",
+  batchAllocations: "batch_allocations",
   productId: "product_id",
   expectedUnitPrice: "expected_unit_price",
   paymentMethod: "payment_method",
@@ -64,9 +134,7 @@ const createSaleBodySchema = z.discriminatedUnion("payment_method", [
       cash_received: money2(0, 999_999_999_999.99),
     })
     .strict()
-    .refine(
-      (input) => input.product_id !== undefined || input.batch_id != null,
-    ),
+    .superRefine(validateSaleBatchSelection),
   z
     .object({
       ...saleBase,
@@ -74,9 +142,7 @@ const createSaleBodySchema = z.discriminatedUnion("payment_method", [
       transfer_confirmed: z.literal(true),
     })
     .strict()
-    .refine(
-      (input) => input.product_id !== undefined || input.batch_id != null,
-    ),
+    .superRefine(validateSaleBatchSelection),
 ]);
 
 export const createSaleSchema = z.preprocess(
@@ -179,6 +245,7 @@ const productAliases = {
   categoryId: "category_id",
   trackingMode: "tracking_mode",
   sizeLabel: "size_label",
+  variantLabel: "variant_label",
   unitPrice: "unit_price",
   stockQuantity: "stock_quantity",
   isActive: "is_active",
@@ -191,6 +258,7 @@ const productFields = {
   tracking_mode: z.enum(PRODUCT_TRACKING_MODES),
   species: z.string().trim().min(1).max(100).nullable(),
   size_label: z.string().trim().min(1).max(20).nullable(),
+  variant_label: z.string().max(80).nullable().optional(),
   unit: z.string().trim().min(1).max(20),
   unit_price: money2(0.01, 10_000_000),
   stock_quantity: money2(0, 999_999_999_999.99).nullable(),
@@ -227,6 +295,7 @@ export const updateProductSchema = z.preprocess(
       tracking_mode: productFields.tracking_mode.optional(),
       species: productFields.species.optional(),
       size_label: productFields.size_label.optional(),
+      variant_label: productFields.variant_label,
       unit: productFields.unit.optional(),
       unit_price: productFields.unit_price.optional(),
       stock_quantity: productFields.stock_quantity.optional(),

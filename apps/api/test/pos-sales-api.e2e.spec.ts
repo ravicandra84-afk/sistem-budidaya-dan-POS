@@ -141,7 +141,10 @@ databaseSuite("POS create-sale HTTP integration", () => {
     };
   }
 
-  async function createNonBatchFixture(role: string): Promise<ProductFixture> {
+  async function createNonBatchFixture(
+    role: string,
+    stock = 10,
+  ): Promise<ProductFixture> {
     const user = await createActor(role);
     const category = await admin.productCategory.findUniqueOrThrow({
       where: { code: "PRODUK-UMUM" },
@@ -157,7 +160,7 @@ databaseSuite("POS create-sale HTTP integration", () => {
         sizeLabel: null,
         unit: "SAK",
         unitPrice: new Prisma.Decimal("1250.50"),
-        stockQuantity: new Prisma.Decimal("10.00"),
+        stockQuantity: new Prisma.Decimal(String(stock)),
       },
       select: { id: true },
     });
@@ -311,7 +314,7 @@ databaseSuite("POS create-sale HTTP integration", () => {
       .set("Idempotency-Key", idempotencyKey);
   }
 
-  function getSellableCatalog(fixture: ProductFixture) {
+  function getSellableCatalog(fixture: Pick<ProductFixture, "user">) {
     return request(app.getHttpServer())
       .get("/api/v1/pos/catalog")
       .set("Authorization", `Bearer ${accessToken(fixture.user)}`);
@@ -730,6 +733,351 @@ databaseSuite("POS create-sale HTTP integration", () => {
 
     expect(response.status).toBe(422);
     expect(response.body.error.code).toBe("INVALID_PAYLOAD");
+  });
+
+  it("includes active products without sellable stock in the POS catalog", async () => {
+    const notReady = await createFixture("Owner", {
+      saleReadiness: "BELUM_SIAP",
+    });
+    const zeroStock = await createNonBatchFixture("Owner", 0);
+    if (!notReady.productId) throw new Error("Fixture has no catalog product");
+
+    const response = await getSellableCatalog(notReady);
+    expect(response.status).toBe(200);
+
+    const batchProduct = response.body.data.items.find(
+      (item: { id: string }) => item.id === notReady.productId,
+    );
+    expect(batchProduct).toMatchObject({
+      available_stock: 0,
+      stock_quantity: 0,
+      batches: [],
+    });
+
+    const nonBatchProduct = response.body.data.items.find(
+      (item: { id: string }) => item.id === zeroStock.productId,
+    );
+    expect(nonBatchProduct).toMatchObject({
+      available_stock: 0,
+      stock_quantity: 0,
+      batches: [],
+    });
+  });
+
+  it("matches sellable batches despite species case and size spacing", async () => {
+    const fixture = await createFixture("Owner");
+    if (!fixture.productId) throw new Error("Fixture has no catalog product");
+
+    await admin.$transaction(async (transaction) => {
+      await transaction.fishSpecies.update({
+        where: { id: fixture.speciesId },
+        data: { speciesName: "Lele" },
+      });
+      await transaction.product.update({
+        where: { id: fixture.productId! },
+        data: { species: "LELE", sizeLabel: "3 - 5 cm" },
+      });
+    });
+
+    const response = await getSellableCatalog(fixture);
+    expect(response.status).toBe(200);
+
+    const product = response.body.data.items.find(
+      (item: { id: string }) => item.id === fixture.productId,
+    );
+    expect(product).toMatchObject({
+      available_stock: 100,
+      stock_quantity: 100,
+      batches: [
+        expect.objectContaining({
+          id: fixture.batchId,
+          species_name: "Lele",
+          size_label: "3-5 cm",
+        }),
+      ],
+    });
+  });
+
+  it("supports active products with the same species and size but different variants", async () => {
+    const fixture = await createFixture("Owner", { withPrice: false });
+    await admin.fishSpecies.update({
+      where: { id: fixture.speciesId },
+      data: { speciesName: "Nila" },
+    });
+    const category = await admin.productCategory.findUniqueOrThrow({
+      where: { code: "BENIH-IKAN" },
+      select: { id: true },
+    });
+    const createVariant = (variant: string) =>
+      postProduct(fixture, {
+        category_id: category.id,
+        sku: `NILA-${variant.toUpperCase()}-${randomUUID()}`,
+        name: `Nila ${variant}`,
+        tracking_mode: "BATCH_TRACKED",
+        species: "Nila",
+        size_label: "3-5 cm",
+        variant_label: variant,
+        unit: "EKOR",
+        unit_price: 2500,
+        stock_quantity: null,
+      });
+    const hitam = await createVariant("Hitam");
+    const merah = await createVariant("Merah");
+
+    expect(hitam.status).toBe(201);
+    expect(merah.status).toBe(201);
+    const updated = await patchProduct(fixture, hitam.body.data.id, {
+      variant_label: "  Hitam  ",
+    });
+    expect(updated.status).toBe(200);
+    expect(updated.body.data.variant_label).toBe("Hitam");
+
+    const listed = await getProducts(fixture);
+    const listedVariants = listed.body.data.items.filter(
+      (product: { id: string }) =>
+        product.id === hitam.body.data.id || product.id === merah.body.data.id,
+    );
+    expect(listedVariants).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: hitam.body.data.id,
+          variant_label: "Hitam",
+        }),
+        expect.objectContaining({
+          id: merah.body.data.id,
+          variant_label: "Merah",
+        }),
+      ]),
+    );
+
+    const catalog = await getSellableCatalog(fixture);
+    const catalogVariants = catalog.body.data.items.filter(
+      (product: { id: string }) =>
+        product.id === hitam.body.data.id || product.id === merah.body.data.id,
+    );
+    expect(catalogVariants).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: hitam.body.data.id,
+          variant_label: "Hitam",
+          batches: [expect.objectContaining({ batch_id: fixture.batchId })],
+        }),
+        expect.objectContaining({
+          id: merah.body.data.id,
+          variant_label: "Merah",
+          batches: [expect.objectContaining({ batch_id: fixture.batchId })],
+        }),
+      ]),
+    );
+  });
+
+  it("creates one atomic split-batch checkout with a combined receipt", async () => {
+    const fixture = await createFixture("Owner", { stock: 600 });
+    if (!fixture.productId) throw new Error("Fixture has no batch product");
+    const secondBatch = await admin.$transaction(async (transaction) => {
+      const batch = await transaction.batch.create({
+        data: {
+          batchCode: `PFI-BCH-20000201-${String(fixtureSequence + 400).padStart(3, "0")}`,
+          status: "active",
+          saleReadiness: "SIAP_JUAL",
+          speciesId: fixture.speciesId,
+          createdBy: fixture.user.id,
+        },
+      });
+      await transaction.incomingFish.create({
+        data: {
+          batchId: batch.id,
+          entryDate: new Date("2000-02-01T00:00:00.000Z"),
+          quantity: 400,
+          purchaseCapital: new Prisma.Decimal("0.00"),
+          shippingCapital: new Prisma.Decimal("0.00"),
+          fishSize: "3-5 cm",
+          createdBy: fixture.user.id,
+        },
+      });
+      return batch;
+    });
+
+    const response = await postSale(fixture, {
+      product_id: fixture.productId,
+      batch_allocations: [
+        { batch_id: fixture.batchId, quantity: 600 },
+        { batch_id: secondBatch.id, quantity: 400 },
+      ],
+      quantity: 1000,
+      expected_unit_price: 2500,
+      payment_method: "cash",
+      cash_received: 2_500_000,
+    });
+
+    expect(response.status).toBe(201);
+    const sale = response.body.data.sale;
+    const receipt = response.body.data.receipt;
+    expect(sale.checkout_group_id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    expect(sale.id).toBe(sale.checkout_group_id);
+    expect(sale).not.toHaveProperty("batch_code");
+    expect(sale).toMatchObject({
+      sold_at: expect.any(String),
+      quantity: 1000,
+      unit: "EKOR",
+      total_payment: 2_500_000,
+      total_price: 2_500_000,
+      cash_received: 2_500_000,
+      change_due: 0,
+      batch_allocations: [
+        { batch_id: fixture.batchId, quantity: 600 },
+        { batch_id: secondBatch.id, quantity: 400 },
+      ],
+    });
+    expect(Object.keys(receipt)).toHaveLength(10);
+    expect(receipt).not.toHaveProperty("batch_code");
+    expect(receipt).toMatchObject({
+      company_name: "PT. Pisciculture Farm Indonesia",
+      transaction_date_time: expect.any(String),
+      species_name: fixture.speciesName,
+      fish_size: "3-5 cm",
+      quantity: 1000,
+      unit: "EKOR",
+      unit_price: 2500,
+      total_payment: 2_500_000,
+      payment_method: "cash",
+      cashier_name: fixture.user.name,
+    });
+
+    const salesRows = await admin.$queryRaw<
+      Array<{
+        id: string;
+        batch_id: string;
+        quantity: Prisma.Decimal;
+        checkout_group_id: string;
+      }>
+    >`
+      SELECT "id", "batch_id", "quantity", "checkout_group_id"
+      FROM "fish_sales"
+      WHERE "checkout_group_id" = ${sale.checkout_group_id}::uuid
+      ORDER BY "batch_id"
+    `;
+    expect(salesRows).toHaveLength(2);
+    expect(
+      new Map(salesRows.map((row) => [row.batch_id, row.quantity.toNumber()])),
+    ).toEqual(
+      new Map([
+        [fixture.batchId, 600],
+        [secondBatch.id, 400],
+      ]),
+    );
+    expect(
+      salesRows.every(
+        (row) => row.checkout_group_id === sale.checkout_group_id,
+      ),
+    ).toBe(true);
+
+    for (const batchId of [fixture.batchId, secondBatch.id]) {
+      const [batchState] = await admin.$queryRaw<
+        Array<{ status: string; remaining_stock: bigint }>
+      >`
+        SELECT "status", "calculate_batch_stock"(${batchId}::uuid) AS remaining_stock
+        FROM "batches" WHERE "id" = ${batchId}::uuid
+      `;
+      expect(batchState).toEqual({ status: "completed", remaining_stock: 0n });
+    }
+
+    const history = await getSales(fixture);
+    const groupedHistory = history.body.data.items.filter(
+      (item: { checkout_group_id?: string }) =>
+        item.checkout_group_id === sale.checkout_group_id,
+    );
+    expect(groupedHistory).toHaveLength(1);
+    expect(groupedHistory[0]).toMatchObject({
+      quantity: 1000,
+      total_price: 2_500_000,
+    });
+    expect((await getSale(fixture, sale.id)).body.data).toMatchObject({
+      checkout_group_id: sale.checkout_group_id,
+      quantity: 1000,
+      total_price: 2_500_000,
+    });
+    expect((await getReceipt(fixture, sale.id)).body.data).toMatchObject(
+      receipt,
+    );
+
+    const voided = await voidSale(fixture, sale.id);
+    expect(voided.status).toBe(200);
+    expect(voided.body.data.voided_sale_ids).toHaveLength(2);
+    expect(
+      await admin.fishSaleVoid.count({
+        where: { saleId: { in: salesRows.map((row) => row.id) } },
+      }),
+    ).toBe(2);
+    for (const batchId of [fixture.batchId, secondBatch.id]) {
+      const state = await admin.batch.findUniqueOrThrow({
+        where: { id: batchId },
+        select: { status: true },
+      });
+      expect(state.status).toBe("active");
+    }
+  });
+
+  it("rolls back all split allocations when one batch has insufficient stock", async () => {
+    const fixture = await createFixture("Owner", { stock: 600 });
+    if (!fixture.productId) throw new Error("Fixture has no batch product");
+    const secondBatch = await admin.$transaction(async (transaction) => {
+      const batch = await transaction.batch.create({
+        data: {
+          batchCode: `PFI-BCH-20000201-${String(fixtureSequence + 500).padStart(3, "0")}`,
+          status: "active",
+          saleReadiness: "SIAP_JUAL",
+          speciesId: fixture.speciesId,
+          createdBy: fixture.user.id,
+        },
+      });
+      await transaction.incomingFish.create({
+        data: {
+          batchId: batch.id,
+          entryDate: new Date("2000-02-01T00:00:00.000Z"),
+          quantity: 300,
+          purchaseCapital: new Prisma.Decimal("0.00"),
+          shippingCapital: new Prisma.Decimal("0.00"),
+          fishSize: "3-5 cm",
+          createdBy: fixture.user.id,
+        },
+      });
+      return batch;
+    });
+    const salesBefore = await admin.fishSale.count();
+
+    const response = await postSale(fixture, {
+      product_id: fixture.productId,
+      batch_allocations: [
+        { batch_id: fixture.batchId, quantity: 600 },
+        { batch_id: secondBatch.id, quantity: 400 },
+      ],
+      quantity: 1000,
+      expected_unit_price: 2500,
+      payment_method: "cash",
+      cash_received: 2_500_000,
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe("INSUFFICIENT_STOCK");
+    expect(await admin.fishSale.count()).toBe(salesBefore);
+    for (const [batchId, expectedStock] of [
+      [fixture.batchId, 600],
+      [secondBatch.id, 300],
+    ] as const) {
+      const [batchState] = await admin.$queryRaw<
+        Array<{ status: string; remaining_stock: bigint }>
+      >`
+        SELECT "status", "calculate_batch_stock"(${batchId}::uuid) AS remaining_stock
+        FROM "batches" WHERE "id" = ${batchId}::uuid
+      `;
+      expect(batchState).toEqual({
+        status: "active",
+        remaining_stock: BigInt(expectedStock),
+      });
+    }
   });
 
   it("denies Kepala Budidaya from the sellable POS catalog", async () => {
@@ -1680,5 +2028,35 @@ databaseSuite("POS create-sale HTTP integration", () => {
     const response = await voidSale(fixture, missingId);
     expect(response.status).toBe(404);
     expect(response.body.error.code).toBe("SALE_NOT_FOUND");
+  });
+
+  it("matches species and size labels after normalization during checkout", async () => {
+    const fixture = await createFixture("Kasir");
+    if (!fixture.productId) throw new Error("Fixture has no batch product");
+    await admin.product.update({
+      where: { id: fixture.productId },
+      data: {
+        species: "LELE",
+        sizeLabel: "3 - 5 cm",
+        variantLabel: `NORMALIZE-${fixtureSequence}`,
+      },
+    });
+    await admin.fishSpecies.update({
+      where: { id: fixture.speciesId },
+      data: { speciesName: "Lele" },
+    });
+
+    const response = await postSale(
+      fixture,
+      cashPayload(fixture.batchId, { quantity: 2, cash_received: 6000 }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.sale).toMatchObject({
+      batch_id: fixture.batchId,
+      product_id: fixture.productId,
+      quantity: 2,
+      total_price: 5000,
+    });
   });
 });
