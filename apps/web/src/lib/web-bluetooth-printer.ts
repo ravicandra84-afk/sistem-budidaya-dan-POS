@@ -25,10 +25,7 @@ interface BluetoothRemoteGATT {
 
 export interface BluetoothDevice {
   gatt?: BluetoothRemoteGATT | null;
-  addEventListener(
-    type: "gattserverdisconnected",
-    listener: () => void,
-  ): void;
+  addEventListener(type: "gattserverdisconnected", listener: () => void): void;
 }
 
 interface WebBluetoothApi {

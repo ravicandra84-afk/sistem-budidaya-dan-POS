@@ -152,10 +152,7 @@ async function setBluetoothBehavior(page: Page) {
                 disconnectedListener?.();
               },
             },
-            addEventListener: (
-              _type: string,
-              listener: () => void,
-            ) => {
+            addEventListener: (_type: string, listener: () => void) => {
               disconnectedListener = listener;
             },
           };

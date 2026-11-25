@@ -505,7 +505,7 @@ export function V46PosCatalog() {
               ? `${printError.message} Dialog cetak browser dibuka.`
               : "Cetak Bluetooth gagal. Dialog cetak browser dibuka.",
           );
-              setPrinterConnected(connectedPrinter.gatt?.connected ?? false);
+          setPrinterConnected(connectedPrinter.gatt?.connected ?? false);
           setReceiptAutoPrint(true);
         }
       }
