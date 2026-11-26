@@ -29,7 +29,7 @@ const apiEnvironmentSchema = z.object({
     .string()
     .regex(/^\/[a-z0-9/]+$/)
     .default("/api/v1"),
-  TZ: z.literal("Asia/Jakarta"),
+  TZ: z.literal("Asia/Jakarta").default("Asia/Jakarta"),
   DATABASE_URL: z
     .string()
     .url()
@@ -86,5 +86,6 @@ export function loadApiEnvironment(
     );
   }
 
+  process.env.TZ = parsed.data.TZ;
   return parsed.data;
 }
