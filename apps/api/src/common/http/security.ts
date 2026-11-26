@@ -32,7 +32,7 @@ export function configureApiSecurity(
 
   app.enableCors({
     origin: origins,
-    methods: ["GET", "POST", "OPTIONS"],
+    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Authorization", "Content-Type", "Idempotency-Key"],
     exposedHeaders: ["X-Request-Id"],
     credentials: false,
