@@ -19,6 +19,16 @@ describe("API environment validation", () => {
     expect(loadApiEnvironment(validEnvironment).PORT).toBe(4000);
   });
 
+  it("accepts the Supabase pooler runtime username", () => {
+    expect(
+      loadApiEnvironment({
+        ...validEnvironment,
+        DATABASE_URL:
+          "postgresql://pfi_app_runtime.abcdefghijklmnop:local-only@pooler.example:6543/pfi_db",
+      }).DATABASE_URL,
+    ).toContain("pfi_app_runtime.abcdefghijklmnop");
+  });
+
   it("fails fast when required configuration is missing", () => {
     expect(() => loadApiEnvironment({})).toThrow(
       "Invalid API environment configuration",
@@ -34,6 +44,20 @@ describe("API environment validation", () => {
     ).toThrow("Invalid API environment configuration");
   });
 
+  it.each([
+    "pfi_app_runtime.short",
+    "pfi_app_runtime.ABCDEFGHIJKLMNO",
+    "pfi_app_runtime.abcdefghijklmnop.extra",
+    "postgres",
+  ])("rejects an invalid runtime role username %s", (username) => {
+    expect(() =>
+      loadApiEnvironment({
+        ...validEnvironment,
+        DATABASE_URL: `postgresql://${username}:local-only@localhost:5432/pfi_db`,
+      }),
+    ).toThrow("Invalid API environment configuration");
+  });
+
   it.each(["*", "http://localhost:3000/path", "not-an-origin"])(
     "rejects an unsafe CORS origin %s",
     (origin) => {
@@ -45,6 +69,16 @@ describe("API environment validation", () => {
       ).toThrow("Invalid API environment configuration");
     },
   );
+
+  it("accepts multiple comma-separated CORS origins", () => {
+    expect(
+      loadApiEnvironment({
+        ...validEnvironment,
+        CORS_ALLOWED_ORIGINS:
+          "https://web.example.com, https://admin.example.com",
+      }).CORS_ALLOWED_ORIGINS,
+    ).toBe("https://web.example.com, https://admin.example.com");
+  });
 
   it("rejects a frontend URL that is not an origin", () => {
     expect(() =>

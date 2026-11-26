@@ -2,7 +2,11 @@ import dotenv from "dotenv";
 import { resolve } from "node:path";
 import { z } from "zod";
 
-dotenv.config({ path: resolve(__dirname, "../../../../.env"), quiet: true, override: true });
+dotenv.config({
+  path: resolve(__dirname, "../../../../.env"),
+  quiet: true,
+  override: true,
+});
 
 const originSchema = z
   .string()
@@ -30,10 +34,15 @@ const apiEnvironmentSchema = z.object({
     .string()
     .url()
     .refine((value) => value.startsWith("postgresql://"))
-    .refine(
-      (value) =>
-        decodeURIComponent(new URL(value).username) === "pfi_app_runtime",
-    ),
+    .refine((value) => {
+      try {
+        return /^pfi_app_runtime(\.[a-z0-9]{15,32})?$/.test(
+          decodeURIComponent(new URL(value).username),
+        );
+      } catch {
+        return false;
+      }
+    }),
   JWT_SECRET: z
     .string()
     .min(32)

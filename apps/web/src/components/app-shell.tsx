@@ -8,6 +8,7 @@ import {
   ScrollText,
   ShoppingCart,
   Tag,
+  UsersRound,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -60,6 +61,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     ...(session.user.role === "Owner" ||
     session.user.role === "Admin Operasional"
       ? [{ href: "/pos/prices", label: "Daftar harga", Icon: Tag }]
+      : []),
+    ...(session.user.role === "Owner"
+      ? [{ href: "/users", label: "Manajemen User", Icon: UsersRound }]
       : []),
     ...(session.user.role === "Owner" ||
     session.user.role === "Admin Operasional" ||
