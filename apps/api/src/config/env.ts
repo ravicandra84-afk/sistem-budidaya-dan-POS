@@ -75,7 +75,11 @@ export type ApiEnvironment = z.infer<typeof apiEnvironmentSchema>;
 export function loadApiEnvironment(
   environment: NodeJS.ProcessEnv = process.env,
 ): ApiEnvironment {
-  const parsed = apiEnvironmentSchema.safeParse(environment);
+  const normalizedEnv = {
+    ...environment,
+    TZ: !environment.TZ || environment.TZ === ":UTC" || environment.TZ === "UTC" ? "Asia/Jakarta" : environment.TZ,
+  };
+  const parsed = apiEnvironmentSchema.safeParse(normalizedEnv);
 
   if (!parsed.success) {
     const invalidKeys = [
