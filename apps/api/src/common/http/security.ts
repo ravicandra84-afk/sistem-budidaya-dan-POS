@@ -21,12 +21,13 @@ export function configureApiSecurity(
     }),
   );
 
+  const normalizeOrigin = (value: string) => value.trim().replace(/\/+$/, "");
   const origins = [
     ...new Set([
-      environment.FRONTEND_URL,
-      ...environment.CORS_ALLOWED_ORIGINS.split(",").map((origin) =>
-        origin.trim(),
-      ),
+      normalizeOrigin(environment.FRONTEND_URL),
+      ...environment.CORS_ALLOWED_ORIGINS.split(",")
+        .map(normalizeOrigin)
+        .filter(Boolean),
     ]),
   ];
 
